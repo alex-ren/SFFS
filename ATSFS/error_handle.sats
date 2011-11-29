@@ -5,24 +5,28 @@
  * Description: Error Handling
 ** *************************/
 
-absviewtype rollback_ele
-absviewtype rollback (n: int)
+abst@ype error_code (e: int) = int
+typedef ecode (e: int) = error_code (e)
+typedef ecode = [e: int] ecode (e)
+#define is_succ ecode_is_succ
 
-fun rollback_create (): rollback (0)
-fun rollback_pack {n:nat} (r1: rollback (n)): rollback_ele
-fun rollback_add {n:nat}(rb: !rollback (n) >> rollback (n+1), re: rollback_ele): void
-fun rollback_do {n:nat} (r: rollback (n)): int
+fun ecode_is_succ {e: int} (e: ecode (e)):<> bool (e == 0)
 
-// fun operation {n:nat}(pf: tag n | x: int): (tag (n+1) | (rollback (n+1), erase(n+1), b))
+absviewtype resource
 
-absviewtype opt_rollback (n: int, e: int) = rollback (n)
-viewtypedef optrb (n: int, e: int) = opt_rollback (n, e)
+absview tag (n: int)
+prfun tag_create (): tag 0
+prfun tag_free (t: tag 0): void
 
-praxi optrb_succ   {n: nat} (x: !(rollback (n+1)) >> optrb (n, 0)):<prf> void
-praxi optrb_unsucc {n: nat} (x: !optrb (n, 0) >> rollback (n+1)):<prf> void
-//
-praxi optrb_fail   {n:nat} {e:int| e <> 0} (x: !(rollback (n)) >> optrb (n, e)):<prf> void
-praxi optrb_unfail {n:nat} {e:int| e <> 0} (x: !optrb (n, e) >> rollback (n)):<prf> void
-//
+viewdef tagdec (n:int) = (tag n) -<lin, prf> tag (n-1)
 
- 
+praxi tag_inc {n:int} (t: tag n): (tag (n+1), tagdec (n+1))
+
+absview opt_tag (n: int, e: int)
+viewdef optt (n: int, e: int) = opt_tag (n, e)
+
+praxi optt_succ {n: nat} (pf: tag (n+1)):<prf> opt_tag (n, 0)
+praxi optt_unsucc {n: nat} (pf: opt_tag (n, 0)):<prf> tag (n+1)
+
+praxi optt_fail   {n: nat} {e:int| e <> 0} (pf: tag n):<prf> opt_tag (n, e)
+praxi optt_unfail {n: nat} {e:int| e <> 0} (pf: opt_tag (n, e)):<prf> tag n

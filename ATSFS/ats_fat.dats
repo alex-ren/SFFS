@@ -8,6 +8,8 @@
 staload "ats_fat.sats"
 staload "ats_spec.sats"
 
+(* ************** ****************** *)
+
 
 /* *************************
  * fun inode_get_fst_cluster (inode: !inode): cluster_i
@@ -23,12 +25,16 @@ end
  * fun inode_get_fst_cluster_post (inode: !inode, ret: cluster_id): bool
  * *************************/
 implement inode_get_fst_cluster_post (inode, ret) =
-let
-  val t = inode_get_file_type (inode)
-in
-  if t = FILE_TYPE_DIR then ret <> FAT_ENT_FREE && ret <> FAT_ENT_EOF
-  else ret <> FAT_ENT_EOF
-end
+if ret = FAT_ENT_FREE || ret = FAT_ENT_BAD then false else
+  let
+    val t = inode_get_file_type (inode)
+  in
+    if t = FILE_TYPE_DIR then ret <> FAT_ENT_EOF
+    else true
+  end
+
+(* ************** ****************** *)
+
 
 /* *************************
  * fun inode_create (
@@ -44,6 +50,35 @@ implement inode_create (dir, name, mode, hd, error) = let
 in
   inode_create_main (dir, name, mode, hd, error)
 end
+
+(* ************** ****************** *)
+(*
+fun clusters_loopup_name_main (hd: !hd, name: name, start: cluster_id, error: &ecode? >> ecode (e)): #[e: int] 
+  option_vt (@(cluster_id, block_id, dir_entry_id), e == 0)
+fun clusters_loopup_name_precond (hd: !hd, name: name, start: cluster_id, error: &ecode?): bool
+*)
+implement clusters_loopup_name (hd, name, start, error) = let
+  val () = assert (clusters_loopup_name_precond (hd, name, start, error))
+  val ret = clusters_loopup_name (hd, name, start, error)
+//  val () = assert (clusters_loopup_name_postcond (hd, name, start, error, ret))
+in
+  ret
+end
+
+implement clusters_loopup_name_precond (hd, name, start, error) = if
+  start >= 1 && start <= FAT_SZ
+then true else false
+
+implement clusters_loopup_name_main (hd, name, start, error) = let
+  fun clusters_loopup_name_loop {k: nat | k < FAT_SZ} .<k>.
+    (hd: !hd, name: name, cur: cluster_id, k: int k, error: &ecode? >> ecode (e)):<> 
+    #[e: int] option_vt (@(cluster_id, block_id, dir_entry_id), e == 0) = 
+
+// implement clusters_loopup_name_postcond (hd, name, start, error, ret) = content_post
+
+ 
+(* ************** ****************** *)
+
 
 
 /* *************************

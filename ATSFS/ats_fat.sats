@@ -38,11 +38,6 @@ staload "ats_spec.sats"
 absviewtype inode
 //absviewtype dentry
 
-// abst@ype errorcode
-typedef error_code = int
-typedef ecode =  error_code
-
-
 abst@ype mode
 
 abst@ype time
@@ -52,14 +47,17 @@ fun get_cur_time (): time
 
 // only 28 bits are valid
 #define FAT_ENT_FREE 0
-// #define FAT_ENT_BAD 0xFFFFFF7
-// #define FAT_ENT_EOF 0xFFFFFFF
-// todo to change back
-#define FAT_ENT_BAD 1
-#define FAT_ENT_EOF 2
+// #define FAT_ENT_BAD 0xFFFFFF7  // 0xFFFFFFFF
+// #define FAT_ENT_EOF 0xFFFFFFF  // 0xFFFFFFF
+// #define FAT_SZ 0xFFFFFF
 
+// todo to change back
+#define FAT_ENT_BAD 1000
+#define FAT_ENT_EOF 100
+#define FAT_SZ 10
 
 #define BLK_SZ 512
+
 
 typedef block_id = [i: nat] int i
 typedef block = seq char
@@ -68,15 +66,16 @@ fun validate_block (b: block): bool (* =
 *)
 
 #define BLKS_PER_CLS 4
-typedef cluster_id = [i: nat | i <= FAT_ENT_EOF && i <> FAT_ENT_BAD] int i
+typedef cluster_id = [i: pos | i <= FAT_SZ || i == FAT_ENT_FREE || i == FAT_ENT_EOF || i == FAT_ENT_BAD] int i
 typedef cluster = seq block
 fun validate_cluster (c: cluster): bool (* =
   (seq_len c) == BLKS_PER_CLS
 *)
 
-#define FAT_SZ 1000000
+
 
 absviewtype hd  // hard disk
+// similar to superblock, from hd we can know anything
 
 (* external function *)
 fun hd_set_fat_entry (hd: !hd, ind: cluster_id, entry: cluster_id, error: &ecode? >> ecode): void
@@ -85,7 +84,7 @@ fun hd_set_fat_entry (hd: !hd, ind: cluster_id, entry: cluster_id, error: &ecode
 fun hd_get_fat_entry (hd: !hd, ind: cluster_id, error: &ecode? >> ecode): option cluster_id
 
 (* external function *)
-fun hd_get_fat_free_entry (hd: !hd): option cluster_id
+fun hd_get_fat_free_entry (hd: !hd, error: &ecode? >> ecode): option cluster_id
 
 (* external function *)
 fun hd_write_block (hd: !hd, ind: block_id, block: block, error: &ecode? >> ecode): void
@@ -122,18 +121,19 @@ fun inode_get_file_type (inode: !inode): file_type
 fun inode_get_fst_cluster (inode: !inode): cluster_id
 fun inode_get_fst_cluster_main (inode: !inode): cluster_id
 fun inode_get_fst_cluster_post (inode: !inode, ret: cluster_id): bool (* =
-  if ret = ret <> FAT_ENT_BAD then false else let
+if ret = FAT_ENT_FREE || ret = FAT_ENT_BAD then false else
+  let
     val t = inode_get_file_type (inode)
   in
-    if t = FILE_TYPE_DIR then ret <> FAT_ENT_FREE && ret <> FAT_ENT_EOF 
-    else ret <> FAT_ENT_EOF && ret <> ret <> FAT_ENT_BAD
+    if t = FILE_TYPE_DIR then ret <> FAT_ENT_EOF
+    else true
   end
 *)
 
 
 // #define DIR_ENTRYS_PER_BLOCK (BLK_SZ / DIR_ENTRY_LEN)
 // todo to change back
-#define DIR_ENTRYS_PER_BLOCK 3
+#define DIR_ENTRYS_PER_BLOCK 16
 
 typedef dir_entry_id = [i: nat | i < DIR_ENTRYS_PER_BLOCK] int i
 
@@ -179,10 +179,29 @@ fun fat_cluster_id_to_block_id_precond (clsid: cluster_id): block_id (* =
   clsid <> FAT_ENT_BAD && clsid <> FAT_ENT_EOF
 *)
 
-fun clusters_loopup_name (hd: !hd, name: name, start: cluster_id): 
-  option @(cluster_id, block_id, dir_entry_id)
+fun clusters_loopup_name {k: nat | k > 0 && k <= FAT_SZ} 
+  (hd: !hd, name: name, start: cluster_id, k: int k, error: &ecode? >> ecode (e)): #[e: int] 
+  option_vt (@(cluster_id, block_id, dir_entry_id), e == 0)
 
-fun clusters_find_empty_entry (hd: !hd, start: cluster_id):
+fun clusters_loopup_name_main {k: nat | k > 0 && k <= FAT_SZ} 
+  (hd: !hd, name: name, start: cluster_id, k: int k, error: &ecode? >> ecode (e)): #[e: int] 
+  option_vt (@(cluster_id, block_id, dir_entry_id), e == 0)
+
+fun clusters_loopup_name_precond {k: nat | k > 0 && k <= FAT_SZ} 
+  (hd: !hd, name: name, start: cluster_id, k: int k, error: &ecode?): bool (* =
+if start >= 1 && start <= FAT_SZ
+then true else false
+*)
+
+fun blocks_loopup_name {k: nat | k < BLKS_PER_CLS}(hd: !hd, name: name, cur: block_id, k: int k, error: &ecode? >> ecode (e)): #[e: int] 
+  option_vt (@(block_id, dir_entry_id), e == 0)
+  
+fun block_loopup_name (blk: block, name: name, error: &ecode? >> ecode (e)): #[e: int] 
+  option_vt (dir_entry_id, e == 0)
+
+
+fun clusters_find_empty_entry {k: nat | k > 0 && k <= FAT_SZ} 
+(hd: !hd, start: cluster_id, k: int k, error: &ecode? >> ecode (e)): #[e: int] 
   option @(cluster_id, block_id, dir_entry_id)
 
 /* *************************
