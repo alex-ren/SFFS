@@ -8,11 +8,12 @@
 abst@ype error_code (e: int) = int
 typedef ecode (e: int) = error_code (e)
 typedef ecode = [e: int] ecode (e)
-#define is_succ ecode_is_succ
 
 fun ecode_is_succ {e: int} (e: ecode (e)):<> bool (e == 0)
+#define is_succ ecode_is_succ
 
-absviewtype resource
+fun ecode_set {e: int} (err: &ecode? >> ecode (e), v: int e): void
+
 
 absview tag (n: int)
 prfun tag_create (): tag 0
@@ -30,3 +31,10 @@ praxi optt_unsucc {n: nat} (pf: opt_tag (n, 0)):<prf> tag (n+1)
 
 praxi optt_fail   {n: nat} {e:int| e <> 0} (pf: tag n):<prf> opt_tag (n, e)
 praxi optt_unfail {n: nat} {e:int| e <> 0} (pf: opt_tag (n, e)):<prf> tag n
+
+
+
+viewtypedef rollback_res1 (vt: viewtype, n: int) = 
+        (tag n | !vt) -<lin, cloptr1> (tag (n-1) | int)
+        
+        

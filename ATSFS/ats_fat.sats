@@ -72,7 +72,7 @@ fun validate_cluster (c: cluster): bool (* =
   (seq_len c) == BLKS_PER_CLS
 *)
 
-
+viewtypedef rollback_hd (n: int) = rollback_res1 (hd, n)
 
 absviewtype hd  // hard disk
 // similar to superblock, from hd we can know anything
@@ -179,17 +179,17 @@ fun fat_cluster_id_to_block_id_precond (clsid: cluster_id): block_id (* =
   clsid <> FAT_ENT_BAD && clsid <> FAT_ENT_EOF
 *)
 
-fun clusters_loopup_name {k: nat | k > 0 && k <= FAT_SZ} 
-  (hd: !hd, name: name, start: cluster_id, k: int k, error: &ecode? >> ecode (e)): #[e: int] 
+fun clusters_loopup_name
+  (hd: !hd, name: name, start: cluster_id, error: &ecode? >> ecode (e)): #[e: int] 
   option_vt (@(cluster_id, block_id, dir_entry_id), e == 0)
 
-fun clusters_loopup_name_main {k: nat | k > 0 && k <= FAT_SZ} 
-  (hd: !hd, name: name, start: cluster_id, k: int k, error: &ecode? >> ecode (e)): #[e: int] 
+fun clusters_loopup_name_main
+  (hd: !hd, name: name, start: cluster_id, error: &ecode? >> ecode (e)): #[e: int] 
   option_vt (@(cluster_id, block_id, dir_entry_id), e == 0)
 
-fun clusters_loopup_name_precond {k: nat | k > 0 && k <= FAT_SZ} 
-  (hd: !hd, name: name, start: cluster_id, k: int k, error: &ecode?): bool (* =
-if start >= 1 && start <= FAT_SZ
+fun clusters_loopup_name_precond
+  (hd: !hd, name: name, start: cluster_id, error: &ecode?): bool (* =
+if (start >= 1 && start <= FAT_SZ) || start = FAT_ENT_EOF
 then true else false
 *)
 
@@ -204,24 +204,32 @@ fun clusters_find_empty_entry {k: nat | k > 0 && k <= FAT_SZ}
 (hd: !hd, start: cluster_id, k: int k, error: &ecode? >> ecode (e)): #[e: int] 
   option @(cluster_id, block_id, dir_entry_id)
 
+
 /* *************************
  * Function Name: clusters_find_empty_entry_new
  * Desc: locate the dir entry if possible, allocate new cluster to hold
  *   new dir entry if necessary
  * 
 ** *************************/
-fun clusters_find_empty_entry_new (hd: !hd, start: cluster_id, error: &ecode? >> ecode):
-  option @(bool, cluster_id, block_id, dir_entry_id)
-  
-fun clusters_find_empty_entry_new_main (hd: !hd, start: cluster_id, error: &ecode? >> ecode):
-  option @(bool, cluster_id, block_id, dir_entry_id)
-  
-fun clusters_find_empty_entry_new_precond (hd: !hd, start: cluster_id, error: &ecode?): bool
+fun clusters_find_empty_entry_new (pf: tag n | 
+	hd: !hd, 
+	start: cluster_id, 
+	error: &ecode? >> ecode (e)
+): #[e: int] (
+  opt_tag (n, e) | 
+  option_vt (rollback_hd (n+1), e == 0), 
+  option_vt(@(bool, cluster_id, block_id, dir_entry_id), e == 0)
+)
 
-fun clusters_find_empty_entry_new_postcond (
-    hd: !hd, start: cluster_id, error: &ecode, ret: option @(bool, cluster_id, block_id, dir_entry_id)
-): bool
-  
+fun clusters_find_empty_entry_new_precond (
+	hd: !hd, 
+	start: cluster_id, 
+	error: &ecode?
+): bool (* =
+	
+
+*)
+
 
 /* *************************
  * Function Name: clusters_find_empty_entry_new
@@ -262,8 +270,8 @@ fun hd_set_dir_entry (
 // int inode_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
 // nd seems uselsss
 // precond:
-fun inode_create (dir: !inode, name: name, mode: mode, hd: !hd, error: &ecode? >> ecode): option_vt inode
-fun inode_create_main (dir: !inode, name: name, mode: mode, hd: !hd, error: &ecode? >> ecode): option_vt inode
+fun inode_create (dir: !inode, name: name, mode: mode, hd: !hd, error: &ecode? >> ecode (e)): #[e:int] option_vt (inode, e == 0)
+fun inode_create_main (dir: !inode, name: name, mode: mode, hd: !hd, error: &ecode? >> ecode): #[e:int] option_vt (inode, e == 0)
 fun inode_create_pre (dir: !inode, name: name, mode: mode, hd: !hd, error: &ecode?): bool
 (*
 let

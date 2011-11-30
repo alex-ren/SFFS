@@ -52,11 +52,6 @@ in
 end
 
 (* ************** ****************** *)
-(*
-fun clusters_loopup_name_main (hd: !hd, name: name, start: cluster_id, error: &ecode? >> ecode (e)): #[e: int] 
-  option_vt (@(cluster_id, block_id, dir_entry_id), e == 0)
-fun clusters_loopup_name_precond (hd: !hd, name: name, start: cluster_id, error: &ecode?): bool
-*)
 implement clusters_loopup_name (hd, name, start, error) = let
   val () = assert (clusters_loopup_name_precond (hd, name, start, error))
   val ret = clusters_loopup_name (hd, name, start, error)
@@ -66,15 +61,8 @@ in
 end
 
 implement clusters_loopup_name_precond (hd, name, start, error) = if
-  start >= 1 && start <= FAT_SZ
+  (start >= 1 && start <= FAT_SZ) || start = FAT_ENT_EOF
 then true else false
-
-implement clusters_loopup_name_main (hd, name, start, error) = let
-  fun clusters_loopup_name_loop {k: nat | k < FAT_SZ} .<k>.
-    (hd: !hd, name: name, cur: cluster_id, k: int k, error: &ecode? >> ecode (e)):<> 
-    #[e: int] option_vt (@(cluster_id, block_id, dir_entry_id), e == 0) = 
-
-// implement clusters_loopup_name_postcond (hd, name, start, error, ret) = content_post
 
  
 (* ************** ****************** *)
@@ -91,13 +79,15 @@ implement clusters_loopup_name_main (hd, name, start, error) = let
  * ): option_vt inode
  * *************************/
 implement inode_create_main (dir, name, mode, hd, error) = let
-  val fst_cls = inode_get_fst_cluster (dir)
-  val opt_entry = clusters_loopup_name (hd, name, fst_cls)
+  val cid = inode_get_fst_cluster (dir)
+  val opt_entry = clusters_loopup_name (hd, name, cid, error)
 in
-  if option_isnil (opt_entry) = false then let // file already exists
-    val () = error := ECODE_
-  in  option_vt_nil () end
+  if is_succ (error) then let // file already exists
+    val ~Some_vt (_) = opt_entry
+    val () = ecode_set (error, ECODE_)
+  in  None_vt () end
   else let
+    
     val opt_entry = 
       clusters_find_empty_entry_new (hd, fst_cls, error)
   in

@@ -8,13 +8,17 @@
 
 staload "error_handle.sats"
 
+
+
+absviewtype resource
+
 extern fun operation2_1 {n:nat} (pf: tag n 
   | x: !resource,
   e: &ecode? >> ecode (e))
   :<1> #[e: int] (
   opt_tag (n, e) 
   | option_vt (
-      ((tag (n+1) | !resource) -<lin, cloptr1> (tag n | int)), e == 0)
+      rollback_res1 (resource, n+1), e == 0)
   )
 
 extern fun operation2_2 {n:nat} (pf: tag n 
@@ -23,7 +27,7 @@ extern fun operation2_2 {n:nat} (pf: tag n
   :<1> #[e: int] (
   opt_tag (n, e) 
   | option_vt (
-      ((tag (n+1) | !resource) -<lin, cloptr1> (tag n | int)), e == 0)
+      rollback_res1 (resource, n+1), e == 0)
   )
 
 
