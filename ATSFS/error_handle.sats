@@ -34,7 +34,15 @@ praxi optt_unfail {n: nat} {e:int| e <> 0} (pf: opt_tag (n, e)):<prf> tag n
 
 
 
+viewtypedef rollback_res0 (n: int) = 
+        (tag n) -<lin, cloptr1> (tag (n-1) | int)
+        
+fun rollback_res0_relase {n:nat} (rl: rollback_res0 (n)): void
+        
 viewtypedef rollback_res1 (vt: viewtype, n: int) = 
         (tag n | !vt) -<lin, cloptr1> (tag (n-1) | int)
-        
-        
+
+fun rollback_res1_relase {n:nat} {vt:viewtype} (rl: rollback_res1 (vt, n)): void
+
+praxi tag_clear {n: nat} (pf: tag n): void
+

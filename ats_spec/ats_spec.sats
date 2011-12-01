@@ -40,9 +40,12 @@ abstype seq (a: t@ype)  // may be empty
 abstype seq1 (a: t@ype)  // not empty
 abstype map (a:t@ype, b: t@ype)
 abstype inmap (a:t@ype, b: t@ype)  // injective map
-abstype option (a: t@ype)
-abstype option_vt (a: viewt@ype)
+abstype option0 (a: t@ype)
+absviewtype option0_vt (a: viewt@ype)
+abstype option (a: t@ype+, b: bool)
+absviewtype option_vt (a: viewt@ype+, b: bool)
 
+absview option_v (a: view, b: bool)
 (* ************** ****************** *)
 
 // Set
@@ -304,25 +307,68 @@ fun {a, b:t@ype} map_inverse (m: inmap (a, b)): inmap (b, a)
 
 // Optional Types
 // constructor
-fun {a: t@ype} option_make (x: a): option a
-fun {a: t@ype} option_nil (): option a 
+fun {a: t@ype} option0_make (x: a): option0 a
+fun {a: t@ype} option0_nil (): option0 a 
 
 // Operation
-fun {a: t@ype} option_isnil (x: option a): bool
+fun {a: t@ype} option0_isnil (x: option0 a): bool
 
 // x is not null
-fun {a: t@ype} option_getval (x: option a): a
+fun {a: t@ype} option0_getval (x: option0 a): a
 
 // Optional Viewtypes
 // constructor
-fun {a: viewt@ype} option_vt_make (x: a): option_vt a
-fun {a: viewt@ype} option_vt_nil (): option_vt a 
+fun {a: viewt@ype} option0_vt_make (x: a): option0_vt a
+fun {a: viewt@ype} option0_vt_nil (): option0_vt a 
 
 // Operation
-fun {a: viewt@ype} option_vt_isnil (x: option_vt a): bool
+fun {a: viewt@ype} option0_vt_isnil (x: !option0_vt a): bool
 
 // x is not null
-fun {a: viewt@ype} option_vt_getval (x: option_vt a): a
+fun {a: viewt@ype} option0_vt_getval (x: option0_vt a): a
+
+// x is null
+fun {a: viewt@ype} option0_vt_removenil (x: option0_vt a): void
+
+// Optional Types with bool
+// constructor
+fun {a: t@ype} option_make (x: a): option (a, true)
+fun {a: t@ype} option_nil (): option (a, false)
+
+// Operation
+fun {a: t@ype} option_getval (t: option (a, true)): a
+
+// Optional Viewtypes with bool
+// constructor
+fun {a: t@ype} option_vt_make (x: a): option_vt (a, true)
+fun {a: t@ype} option_vt_nil (): option_vt (a, false)
+
+// Operation
+fun {a: viewt@ype} option_vt_getval (x: option_vt (a, true)): a
+fun {a: viewt@ype} option_vt_removenil (x: option_vt (a, false)): void
+
+// Optional View with bool
+// constructor
+prfun option_v_make {a: view} (pf: a): option_v (a, true)
+prfun option_v_nil {a: view} (): option_v (a, false)
+
+// Operation
+prfun option_v_getval {a: view} (pf: option_v (a, true)): a
+prfun option_v_removenil {a: view} (pf: option_v (a, false)): void
+
+symintr unsome
+symintr unnone
+
+overload unsome with option0_getval
+overload unsome with option0_vt_getval
+overload unsome with option_getval
+overload unsome with option_vt_getval
+overload unsome with option_v_getval
+
+overload unnone with option0_vt_removenil
+overload unnone with option_vt_removenil
+overload unnone with option_v_removenil
+
 (* ************** ****************** *)
 /*
  * The type system of VDM is different from ATS. The former has certain

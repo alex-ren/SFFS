@@ -8,6 +8,8 @@
 staload "ats_fat.sats"
 staload "ats_spec.sats"
 
+staload "error_handle.sats"
+
 (* ************** ****************** *)
 
 
@@ -79,61 +81,97 @@ then true else false
  * ): option_vt inode
  * *************************/
 implement inode_create_main (dir, name, mode, hd, error) = let
-  val cid = inode_get_fst_cluster (dir)
-  val opt_entry = clusters_loopup_name (hd, name, cid, error)
+  val fst_cid = inode_get_fst_cluster (dir)
+  val o_entry = clusters_loopup_name (hd, name, fst_cid, error)
 in
   if is_succ (error) then let // file already exists
-    val ~Some_vt (_) = opt_entry
     val () = ecode_set (error, ECODE_)
-  in  None_vt () end
-  else let
-    
-    val opt_entry = 
-      clusters_find_empty_entry_new (hd, fst_cls, error)
+  in  
+    option_vt_nil () 
+  end else let
+    prval vtag = tag_create ()
+    val (optt | o_rollback, o_entry) = 
+      clusters_find_empty_entry_new (vtag, hd, fst_cid, error) 
   in
-    if option_isnil (opt_entry) = true then option_vt_nil ()
-    else  let
+    if is_succ (error) then let  // found empty dir entry
+      prval vtag = optt_unsucc (optt)
+      val rollback1 = unsome (o_rollback)
+      val (is_new, cid, bid, eid) = unsome (o_entry)
+      
+      // update father inode
       val time = get_cur_time ()
-      val @(is_new, cls_id, blk_id, ent_id) = option_getval (opt_entry)
+      val (vtag | rollback2) = inode_set_time (vtag | dir, time)
       val file_size = inode_get_file_size (dir)
-      val () = if inode_set_file_size (dir, file_size + )
-      
-      
-      val blk_no = fat_cluster_id_to_block_id (cls_id) + blk_id
-      
-      val dir_entry = dir_entry_create (name, FILE_TYPE_FILE, FAT_ENT_FREE, 0, time)
-      val bret = hd_set_dir_entry (hd, blk_no, ent_id, dir_entry, error)
+      val (vtag | rollback3) = if is_new then inode_set_file_size (vtag | dir, file_size + CLS_SZ)
+                      else inode_set_file_size (dir, file_size)
+      val (optt | o_rollback) = hd_write_inode (vtag | hd, dir, error)
     in
-      if bret = false then let
-        val () = error := ECODE_FATAL
-        // todo: didn't return the cluster back (if it's new)
+      if is_succ (error) then let
+        prval vtag = optt_unsucc (optt)
+        val rollback4 = unsome (o_rollback)
+        
+        val blk_no = fat_cluster_id_to_block_id (cid) + bid
+        val dentry = dir_entry_create (name, FILE_TYPE_FILE, FAT_ENT_EOF, 0, time)
+        val (optt, o_rollback) = hd_set_dir_entry (vtag | hd, blk_no, eid, dentry, error)
+      in
+        if is_succ (error) then let
+          prval vtag = optt_unsucc (optt)
+          val rollback5 = unsome (o_rollback)
+          
+          val inode = inode_create_from_dir_entry (dir_entry)
+          // todo release all the cloptr
+          val () = rollback_res1_relase (rollback5)
+          val () = rollback_res1_relase (rollback4)
+          val () = rollback_res1_relase (rollback3)
+          val () = rollback_res1_relase (rollback2)
+          val () = rollback_res1_relase (rollback1)
+          
+          prval () = tag_clear (vtag)
+        in
+         option_vt_make (inode)
+        end else let
+          prval vtag = optt_unfail (optt)
+          val () = unnone (o_rollback)
+
+          val (vtag | ret) = rollback4 (vtag | hd)
+          val () = cloptr_free (rollback4)
+          val (vtag | ret) = rollback3 (vtag)
+          val () = cloptr_free (rollback3)
+          val (vtag | ret) = rollback2 (vtag)
+          val () = cloptr_free (rollback2)
+          val (vtag | ret) = rollback1 (vtag | hd)
+          val () = cloptr_free (rollback1)
+          prval () = tag_free (vtag)
+        in
+          option_vt_nil ()
+        end
+      end else let
+        prval vtag = optt_unfail (optt)
+        val () = unnone (o_rollback)
+       
+        val (vtag | ret) = rollback3 (vtag)
+        val () = cloptr_free (rollback3)
+        val (vtag | ret) = rollback2 (vtag)
+        val () = cloptr_free (rollback2)
+        val (vtag | ret) = rollback1 (vtag | hd)
+        val () = cloptr_free (rollback1)
+        prval () = tag_free (vtag)
       in
         option_vt_nil ()
-      end else let
-        // assume that it shall not fail
-        val inode = inode_create_from_dir_entry (dir_entry)
-        // todo set size
-        val @(blk_no, ent_id) = inode_get_dir_entry (dir)
-        val opt_entry = hd_get_dir_entry (hd, blk_no, ent_id, error)
-      in
-        if option_isnil (opt_entry) then option_vt_nil () // todo: didn't return the cluster back (if it's new)
-        else if is_new = true then let
-          val dir_entry = option_getval (opt_entry)
-          val file_size = dir_entry_get_size ()
-          val dir_entry = dir_entry_update_size (dir_entry, file_size + BLK_SZ)
-          val bret = hd_set_dir_entry (hd, blk_no, ent_id, dir_entry, error)
-        in
-          if bret = false then let
-            val () = error := ECODE_FATAL
-            // todo: didn't return the cluster back (if it's new)
-          in
-            option_nil ()
-          end else option_vt_make (inode)
-        end else option_vt_make (inode)
       end
+    end else let
+      prval vtag = optt_unfail (optt)
+      val () = unnone (o_rollback)
+      
+      prval () = tag_free (vtag)
+    in
+      option_vt_nil ()
     end
   end
 end
+     
+          
+    
 
 ////
 /*

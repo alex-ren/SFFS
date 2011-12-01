@@ -32,6 +32,7 @@
 
 
 staload "ats_spec.sats"
+staload "error_handle.sats"
  
 //absviewtype superblock
 // this kind of inode is totally in the memory
@@ -72,25 +73,30 @@ fun validate_cluster (c: cluster): bool (* =
   (seq_len c) == BLKS_PER_CLS
 *)
 
-viewtypedef rollback_hd (n: int) = rollback_res1 (hd, n)
+// #define CLS_SZ (BLK_SZ * BLKS_PER_CLS) todo
+#define CLS_SZ 2048
 
 absviewtype hd  // hard disk
+
+viewtypedef rollback (n: int) = rollback_res0 (n)
+viewtypedef rollback_hd (n: int) = rollback_res1 (hd, n)
+
 // similar to superblock, from hd we can know anything
 
 (* external function *)
-fun hd_set_fat_entry (hd: !hd, ind: cluster_id, entry: cluster_id, error: &ecode? >> ecode): void
+fun hd_set_fat_entry (hd: !hd, ind: cluster_id, entry: cluster_id, error: &ecode? >> ecode (e)): #[e: int] void
 
 (* external function *)
-fun hd_get_fat_entry (hd: !hd, ind: cluster_id, error: &ecode? >> ecode): option cluster_id
+fun hd_get_fat_entry (hd: !hd, ind: cluster_id, error: &ecode? >> ecode (e)): #[e: int] option (cluster_id, e == 0)
 
 (* external function *)
-fun hd_get_fat_free_entry (hd: !hd, error: &ecode? >> ecode): option cluster_id
+fun hd_get_fat_free_entry (hd: !hd, error: &ecode? >> ecode (e)): #[e: int] option (cluster_id, e == 0)
 
 (* external function *)
-fun hd_write_block (hd: !hd, ind: block_id, block: block, error: &ecode? >> ecode): void
+fun hd_write_block (hd: !hd, ind: block_id, block: block, error: &ecode? >> ecode (e)): #[e: int] void
 
 (* external function *)
-fun hd_read_block (hd: !hd, ind: block_id, error: &ecode? >> ecode): option block
+fun hd_read_block (hd: !hd, ind: block_id, error: &ecode? >> ecode (e)): #[e: int] option (block, e == 0)
 
 
 #define MAX_NAME 8
@@ -130,6 +136,8 @@ if ret = FAT_ENT_FREE || ret = FAT_ENT_BAD then false else
   end
 *)
 
+fun inode_set_first_cluster (inode: !inode, cid: cluster_id): void
+
 
 // #define DIR_ENTRYS_PER_BLOCK (BLK_SZ / DIR_ENTRY_LEN)
 // todo to change back
@@ -144,13 +152,19 @@ fun inode_get_dir_entry (inode: !inode): @(cluster_id, block_id, dir_entry_id)
 fun inode_get_file_size (inode: !inode): file_sz
 
 (* external function *)
-fun inode_set_file_size (inode: !inode, sz: file_sz): void
+fun inode_set_file_size {n: nat} (pf: tag (n) | inode: !inode, sz: file_sz): (tag (n+1)| rollback (n+1))
 
 (* external function *)
-fun inode_set_time (inode: !inode, time: time): void
+fun inode_set_time {n: nat} (pf: tag (n) | inode: !inode, time: time): (tag (n+1) | rollback (n+1))
 
 (* external function *)
-fun hd_write_inode (hd: !hd, inode: !inode, error: &ecode? >> ecode): bool
+fun hd_write_inode {n: nat} (pf: tag (n) | 
+	hd: !hd, 
+	inode: !inode, 
+	error: &ecode? >> ecode (e)
+): #[e: int] (opt_tag (n, e) | 
+  option_vt (rollback_hd (n+1), e == 0))
+
 
 (* ************** ****************** *)
 
@@ -181,11 +195,11 @@ fun fat_cluster_id_to_block_id_precond (clsid: cluster_id): block_id (* =
 
 fun clusters_loopup_name
   (hd: !hd, name: name, start: cluster_id, error: &ecode? >> ecode (e)): #[e: int] 
-  option_vt (@(cluster_id, block_id, dir_entry_id), e == 0)
+  option (@(cluster_id, block_id, dir_entry_id), e == 0)
 
 fun clusters_loopup_name_main
   (hd: !hd, name: name, start: cluster_id, error: &ecode? >> ecode (e)): #[e: int] 
-  option_vt (@(cluster_id, block_id, dir_entry_id), e == 0)
+  option (@(cluster_id, block_id, dir_entry_id), e == 0)
 
 fun clusters_loopup_name_precond
   (hd: !hd, name: name, start: cluster_id, error: &ecode?): bool (* =
@@ -194,15 +208,15 @@ then true else false
 *)
 
 fun blocks_loopup_name {k: nat | k < BLKS_PER_CLS}(hd: !hd, name: name, cur: block_id, k: int k, error: &ecode? >> ecode (e)): #[e: int] 
-  option_vt (@(block_id, dir_entry_id), e == 0)
+  option (@(block_id, dir_entry_id), e == 0)
   
 fun block_loopup_name (blk: block, name: name, error: &ecode? >> ecode (e)): #[e: int] 
-  option_vt (dir_entry_id, e == 0)
+  option (dir_entry_id, e == 0)
 
 
 fun clusters_find_empty_entry {k: nat | k > 0 && k <= FAT_SZ} 
 (hd: !hd, start: cluster_id, k: int k, error: &ecode? >> ecode (e)): #[e: int] 
-  option @(cluster_id, block_id, dir_entry_id)
+  option (@(cluster_id, block_id, dir_entry_id), e == 0)
 
 
 /* *************************
@@ -211,14 +225,14 @@ fun clusters_find_empty_entry {k: nat | k > 0 && k <= FAT_SZ}
  *   new dir entry if necessary
  * 
 ** *************************/
-fun clusters_find_empty_entry_new (pf: tag n | 
+fun clusters_find_empty_entry_new {n: nat} (pf: tag n | 
 	hd: !hd, 
 	start: cluster_id, 
 	error: &ecode? >> ecode (e)
 ): #[e: int] (
   opt_tag (n, e) | 
   option_vt (rollback_hd (n+1), e == 0), 
-  option_vt(@(bool, cluster_id, block_id, dir_entry_id), e == 0)
+  option_vt (@(bool, cluster_id, block_id, dir_entry_id), e == 0)
 )
 
 fun clusters_find_empty_entry_new_precond (
@@ -236,9 +250,9 @@ fun clusters_find_empty_entry_new_precond (
  * Desc: add one cluster to the chain if possible
  * 
 ** *************************/
-fun clusters_add_one (hd: !hd, start: cluster_id, error: &ecode? >> ecode): option cluster_id
+fun clusters_add_one (hd: !hd, start: cluster_id, error: &ecode? >> ecode (e)): #[e: int] option (cluster_id, e == 0)
 
-fun fs_allocate_cluster (hd: !hd, error: &ecode? >> ecode): option cluster_id
+fun fs_allocate_cluster (hd: !hd, error: &ecode? >> ecode (e)): #[e: int] option (cluster_id, e == 0)
 
 fun clusters_find_last (hd: !hd, start: cluster_id): cluster_id
 fun clusters_find_last_main (hd: !hd, start: cluster_id): cluster_id
@@ -252,13 +266,17 @@ fun inode_create_from_dir_entry (e: dir_entry): inode
 
 (* external function *)
 fun hd_get_dir_entry (
-    hd: !hd, blkid: block_id, entyrid: dir_entry_id, error: &ecode? >> ecode
-): option dir_entry
+    hd: !hd, blkid: block_id, entyrid: dir_entry_id, error: &ecode? >> ecode e
+): #[e: int] option (dir_entry, e == 0)
 
 (* external function *)
-fun hd_set_dir_entry (
-    hd: !hd, blkid: block_id, entyrid: dir_entry_id, entry: dir_entry, error: &ecode? >> ecode
-): bool
+fun hd_set_dir_entry {n:nat} (pf: tag (n) |
+    hd: !hd, 
+    blkid: block_id, 
+    entryid: dir_entry_id, 
+    entry: dir_entry, 
+    error: &ecode? >> ecode (e)
+): #[e: int] (opt_tag (n, e) | option_vt (rollback_hd (n+1), e == 0))
 
 
 (* VFS function *)
@@ -284,7 +302,7 @@ end
 
 // struct dentry *inode_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nd)
 // nd seems useless
-fun inode_lookup_main (d: !hd, dir: inode, name: name, error: &ecode? >> ecode): option_vt inode
+fun inode_lookup_main (d: !hd, dir: inode, name: name, error: &ecode? >> ecode e): #[e: int] option_vt (inode, e == 0)
 fun inode_loopup_pre (d: !hd, dir: inode, name: name, error: &ecode?): bool (* =
 let
   val t = inode_get_file_type (inode)
