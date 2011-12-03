@@ -8,6 +8,7 @@
 #include <linux/proc_fs.h>	/* Necessary because we use proc fs */
 #include <asm/uaccess.h>	/* for copy_*_user */
 
+
 #define PROC_ENTRY_FILENAME 	"buffer2k"
 #define PROCFS_MAX_SIZE 	2048
 
@@ -103,10 +104,10 @@ procfs_write(struct file *file, const char *buffer, size_t len, loff_t * off)
  *
  * This is the real function that checks file
  * permissions. The permissions returned by ls -l are
- * for referece only, and can be overridden here.
+ * for reference only, and can be overridden here.
  */
 
-static int module_permission(struct inode *inode, int op, unsigned int noidea)
+static int module_permission(struct inode *inode, int op)
 {
 	/* 
 	 * We allow everybody to read from our module, but
@@ -171,14 +172,13 @@ int init_module()
 	/* create the /proc file */
 	Our_Proc_File = create_proc_entry(PROC_ENTRY_FILENAME, 0644, NULL);
 	
-	/* check if the /proc file was created successfuly */
+	/* check if the /proc file was created successfully */
 	if (Our_Proc_File == NULL){
 		printk(KERN_ALERT "Error: Could not initialize /proc/%s\n",
 		       PROC_ENTRY_FILENAME);
 		return -ENOMEM;
 	}
 	
-	// Our_Proc_File->owner = THIS_MODULE;
 	Our_Proc_File->proc_iops = &Inode_Ops_4_Our_Proc_File;
 	Our_Proc_File->proc_fops = &File_Ops_4_Our_Proc_File;
 	Our_Proc_File->mode = S_IFREG | S_IRUGO | S_IWUSR;
