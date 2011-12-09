@@ -307,45 +307,45 @@ fun {a, b:t@ype} map_inverse (m: inmap (a, b)): inmap (b, a)
 
 // Optional Types
 // constructor
-fun {a: t@ype} option0_make (x: a): option0 a
-fun {a: t@ype} option0_nil (): option0 a 
+fun option0_make {a: type} (x: a): option0 a
+fun option0_nil {a: type} (): option0 a 
 
 // Operation
-fun {a: t@ype} option0_isnil (x: option0 a): bool
+fun option0_isnil {a: type} (x: option0 a): bool
 
 // x is not null
-fun {a: t@ype} option0_getval (x: option0 a): a
+fun option0_getval {a: type} (x: option0 a): a
 
 // Optional Viewtypes
 // constructor
-fun {a: viewt@ype} option0_vt_make (x: a): option0_vt a
-fun {a: viewt@ype} option0_vt_nil (): option0_vt a 
+fun option0_vt_make {a: viewtype} (x: a): option0_vt a
+fun option0_vt_nil {a: viewtype} (): option0_vt a 
 
 // Operation
-fun {a: viewt@ype} option0_vt_isnil (x: !option0_vt a): bool
+fun option0_vt_isnil {a: viewtype} (x: !option0_vt a): bool
 
 // x is not null
-fun {a: viewt@ype} option0_vt_getval (x: option0_vt a): a
+fun option0_vt_getval {a: viewtype} (x: option0_vt a): a
 
 // x is null
-fun {a: viewt@ype} option0_vt_removenil (x: option0_vt a): void
+fun option0_vt_removenil {a: viewtype} (x: option0_vt a): void
 
 // Optional Types with bool
 // constructor
-fun {a: t@ype} option_make (x: a): option (a, true)
-fun {a: t@ype} option_nil (): option (a, false)
+fun option_make {a: type}(x: a): option (a, true)
+fun option_nil {a: type}(): option (a, false)
 
 // Operation
-fun {a: t@ype} option_getval (t: option (a, true)): a
+fun option_getval {a: type} (t: option (a, true)): a
 
 // Optional Viewtypes with bool
 // constructor
-fun {a: t@ype} option_vt_make (x: a): option_vt (a, true)
-fun {a: t@ype} option_vt_nil (): option_vt (a, false)
+fun option_vt_make {a: viewtype} (x: a): option_vt (a, true)
+fun {a: viewt@ype} option_vt_nil {a: viewtype} (): option_vt (a, false)
 
 // Operation
-fun {a: viewt@ype} option_vt_getval (x: option_vt (a, true)): a
-fun {a: viewt@ype} option_vt_removenil (x: option_vt (a, false)): void
+fun option_vt_getval {a: viewtype} (x: option_vt (a, true)): a
+fun option_vt_removenil {a: viewtype} (x: option_vt (a, false)): void
 
 // Optional View with bool
 // constructor
@@ -359,6 +359,7 @@ prfun option_v_removenil {a: view} (pf: option_v (a, false)): void
 symintr unsome
 symintr unnone
 
+// todo 
 overload unsome with option0_getval
 overload unsome with option0_vt_getval
 overload unsome with option_getval

@@ -47,13 +47,23 @@ if ret = FAT_ENT_FREE || ret = FAT_ENT_BAD then false else
  * error: &ecode? >> ecode
  * ): option_vt inode
  * *************************/
-implement inode_create (dir, name, mode, hd, error) = let
-  val () = assert (inode_create_pre (dir, name, mode, hd, error))
+implement inode_dir_create (dir, name, mode, hd, error) = let
+  val () = assert (inode_dir_create_pre (dir, name, mode, hd, error))
 in
-  inode_create_main (dir, name, mode, hd, error)
+  inode_dir_create_main (dir, name, mode, hd, error)
 end
 
 (* ************** ****************** *)
+
+
+/* *************************
+ * clusters_loopup_name (
+ * 	hd
+ *  name
+ *  start
+ *  error
+ * )
+** *************************/
 implement clusters_loopup_name (hd, name, start, error) = let
   val () = assert (clusters_loopup_name_precond (hd, name, start, error))
   val ret = clusters_loopup_name (hd, name, start, error)
@@ -69,8 +79,6 @@ then true else false
  
 (* ************** ****************** *)
 
-
-
 /* *************************
  * fun inode_create_main (
  * dir: !inode, 
@@ -80,7 +88,7 @@ then true else false
  * error: &ecode? >> ecode
  * ): option_vt inode
  * *************************/
-implement inode_create_main (dir, name, mode, hd, error) = let
+implement inode_dir_create_main (dir, name, mode, hd, error) = let
   val fst_cid = inode_get_fst_cluster (dir)
   val o_entry = clusters_loopup_name (hd, name, fst_cid, error)
 in
@@ -91,47 +99,51 @@ in
   end else let
     prval vtag = tag_create ()
     val (optt | o_rollback, o_entry) = 
-      clusters_find_empty_entry_new (vtag, hd, fst_cid, error) 
+      clusters_find_empty_entry_new (vtag | hd, fst_cid, error) 
   in
     if is_succ (error) then let  // found empty dir entry
       prval vtag = optt_unsucc (optt)
-      val rollback1 = unsome (o_rollback)
-      val (is_new, cid, bid, eid) = unsome (o_entry)
+      val rollback1 = option_vt_getval {rollback_hd (1)} (o_rollback)   // todo why must add type here
+      val '(is_new, cid, bid, eid) = option_vt_getval {'(bool, cluster_id, block_id, dir_entry_id)} (o_entry)   // todo why must add type here
       
       // update father inode
       val time = get_cur_time ()
       val (vtag | rollback2) = inode_set_time (vtag | dir, time)
       val file_size = inode_get_file_size (dir)
-      val (vtag | rollback3) = if is_new then inode_set_file_size (vtag | dir, file_size + CLS_SZ)
-                      else inode_set_file_size (dir, file_size)
-      val (optt | o_rollback) = hd_write_inode (vtag | hd, dir, error)
+
+      val (vtag | rollback3) = (if is_new then inode_set_file_size (vtag | dir, file_size + CLS_SZ)
+                               else inode_set_file_size (vtag | dir, file_size)): (tag 3 | rollback 3)   // todo why must add type here
+      val (optt | o_rollback) = hd_write_inode (vtag | hd, dir, error)  // update the inode for "dir"
     in
       if is_succ (error) then let
         prval vtag = optt_unsucc (optt)
-        val rollback4 = unsome (o_rollback)
+        val rollback4 = option_vt_getval {rollback_hd (4)} (o_rollback)   // todo why must add type here
         
         val blk_no = fat_cluster_id_to_block_id (cid) + bid
         val dentry = dir_entry_create (name, FILE_TYPE_FILE, FAT_ENT_EOF, 0, time)
-        val (optt, o_rollback) = hd_set_dir_entry (vtag | hd, blk_no, eid, dentry, error)
+        // update the dir entry
+        val (optt | o_rollback) = hd_set_dir_entry (vtag | hd, blk_no, eid, dentry, error)  
       in
         if is_succ (error) then let
           prval vtag = optt_unsucc (optt)
-          val rollback5 = unsome (o_rollback)
+          val rollback5 = option_vt_getval (o_rollback)
           
-          val inode = inode_create_from_dir_entry (dir_entry)
-          // todo release all the cloptr
+          val inode = inode_create_from_dir_entry (dentry)
+          // todo "hack here" release all the cloptr
           val () = rollback_res1_relase (rollback5)
           val () = rollback_res1_relase (rollback4)
-          val () = rollback_res1_relase (rollback3)
-          val () = rollback_res1_relase (rollback2)
+          val () = rollback_res0_relase (rollback3)
+          val () = rollback_res0_relase (rollback2)
           val () = rollback_res1_relase (rollback1)
           
           prval () = tag_clear (vtag)
         in
          option_vt_make (inode)
         end else let
+        
+       
           prval vtag = optt_unfail (optt)
-          val () = unnone (o_rollback)
+          val () = option_vt_removenil (o_rollback)
 
           val (vtag | ret) = rollback4 (vtag | hd)
           val () = cloptr_free (rollback4)
@@ -142,13 +154,14 @@ in
           val (vtag | ret) = rollback1 (vtag | hd)
           val () = cloptr_free (rollback1)
           prval () = tag_free (vtag)
+
         in
           option_vt_nil ()
         end
-      end else let
+      end else let  // hd_write_inode failed
         prval vtag = optt_unfail (optt)
-        val () = unnone (o_rollback)
-       
+        val () = option_vt_removenil (o_rollback)
+
         val (vtag | ret) = rollback3 (vtag)
         val () = cloptr_free (rollback3)
         val (vtag | ret) = rollback2 (vtag)
@@ -156,12 +169,14 @@ in
         val (vtag | ret) = rollback1 (vtag | hd)
         val () = cloptr_free (rollback1)
         prval () = tag_free (vtag)
+
       in
         option_vt_nil ()
       end
-    end else let
+    end else let  // clusters_find_empty_entry_new failed
       prval vtag = optt_unfail (optt)
-      val () = unnone (o_rollback)
+      val () = option_vt_removenil (o_rollback)
+      val () = option_vt_removenil (o_entry)
       
       prval () = tag_free (vtag)
     in
@@ -170,8 +185,81 @@ in
   end
 end
      
-          
+(* ************** ****************** *)
+
+/* *************************
+ * fun inode_lookup_main (
+ * 	d: !hd, 
+ *  dir: inode, 
+ *  name: name, 
+ *  error: &ecode? >> ecode e
+ * ): #[e: int] option_vt (inode, e == 0)
+** *************************/
+implement inode_dir_lookup_main (dir, name, hd, error) = let
+  val fst_cid = inode_get_fst_cluster (dir)
+  val o_entry = clusters_loopup_name (hd, name, fst_cid, error)
+in
+  if is_succ (error) then let // file already exists
+    val '(cid, bid, eid) = option_getval {'(cluster_id, block_id, dir_entry_id)} (o_entry)
+    val blk_no = fat_cluster_id_to_block_id (cid) + bid
+    // read dir entry
+    val o_dentry = hd_get_dir_entry (hd, blk_no, eid, error)  
+  in
+    if is_succ (error) then let
+      val dentry = option_getval (o_dentry)
+      val inode = inode_create_from_dir_entry (dentry)
+    in
+      option_vt_make (inode)
+    end else option_vt_nil ()      
+  end else let  // clusters_loopup_name failed
+    val () = ecode_set (error, ECODE_)
+  in
+    option_vt_nil ()
+  end
+end
+
+(* ************** ****************** *)
+
+/* *************************
+ * fun msdos_dir_unlink (
+ * 	dir: !inode, 
+ *  name: name, 
+ *  file: !inode, 
+ *  hd: !hd, 
+ *  error: &ecode? >> ecode e
+ * ): #[e: int] void
+** *************************/
+implement msdos_dir_unlink (dir, name, inode, hd, error) = let
+  val fst_cid = inode_get_fst_cluster (dir)
+  val o_entry = clusters_loopup_name (hd, name, fst_cid, error)  // todo
+in
+  if is_succ (error) then let // file already exists
+    val '(cid, bid, eid) = option_getval {'(cluster_id, block_id, dir_entry_id)} (o_entry)
+    val blk_no = fat_cluster_id_to_block_id (cid) + bid
     
+    prval vtag = tag_create ()
+    val (optt | o_rollback, o_entry) = 
+      hd_clear_dir_entry (vtag | hd, blk_no, eid, error) 
+  in
+    if is_succ (error) then let
+      prval vtag = optt_unsucc (optt)
+      val rollback1 = option_vt_getval {rollback_hd (1)} (o_rollback)   // todo why must add type here
+      // update father inode
+      val time = get_cur_time ()
+      val (vtag | rollback2) = inode_set_time (vtag | dir, time)
+      val file_size = inode_get_file_size (dir)
+
+      val (optt | o_rollback) = hd_write_inode (vtag | hd, dir, error)  // update the inode for "dir"
+    in
+      if is_succ (error) then let
+        
+      
+    
+    
+
+// todo release all the clusters
+// drop_nlink(inode);
+// clear_n_link
 
 ////
 /*
@@ -298,26 +386,6 @@ in
   if next = FAT_ENT_EOF then start
   else clusters_find_last (next, fat)
 end
-
-implement inode_lookup (dir, name, fs) = let
-  val f_cls = inode_get_fst_cluster (dir)
-  val fat = fs.fat
-  val data = fs.data
-  val opt_entry = clusters_lookup (name, f_cls, fat)
-in
-  if option_isnil (opt_entry) then (ECODE_, option_nil ())
-  else let
-    val (clsno, blkno, entryno) = option_getval (opt_entry)
-    val blkno = fat_cluster_to_block (clsno) + blkno
-    val entry = data_get_entry (blkno, entryno, data)
-    val inode = inode_from_dir_entry (entry)
-    val opt_inode = option_make (inode)
-  in
-    (ECODE_OK, opt_inode)
-  end
-end
-  
-
 
 
 
