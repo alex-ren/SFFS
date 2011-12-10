@@ -38,21 +38,6 @@ if ret = FAT_ENT_FREE || ret = FAT_ENT_BAD then false else
 (* ************** ****************** *)
 
 
-/* *************************
- * fun inode_create (
- * dir: !inode, 
- * name: name, 
- * mode: mode, 
- * hd: !hd, 
- * error: &ecode? >> ecode
- * ): option_vt inode
- * *************************/
-implement inode_dir_create (dir, name, mode, hd, error) = let
-  val () = assert (inode_dir_create_pre (dir, name, mode, hd, error))
-in
-  inode_dir_create_main (dir, name, mode, hd, error)
-end
-
 (* ************** ****************** *)
 
 
@@ -79,6 +64,22 @@ then true else false
  
 (* ************** ****************** *)
 
+
+/* *************************
+ * fun inode_create (
+ * dir: !inode, 
+ * name: name, 
+ * mode: mode, 
+ * hd: !hd, 
+ * error: &ecode? >> ecode
+ * ): option_vt inode
+ * *************************/
+implement inode_dir_create (pfrb | dir, name, mode, hd, error) = let
+  val () = assert (inode_dir_create_pre (pfrb | dir, name, mode, hd, error))
+in
+  inode_dir_create_main (pfrb | dir, name, mode, hd, error)
+end
+
 /* *************************
  * fun inode_create_main (
  * dir: !inode, 
@@ -88,7 +89,7 @@ then true else false
  * error: &ecode? >> ecode
  * ): option_vt inode
  * *************************/
-implement inode_dir_create_main (dir, name, mode, hd, error) = let
+implement inode_dir_create_main (pfrb | dir, name, mode, hd, error) = let
   val fst_cid = inode_get_fst_cluster (dir)
   val o_entry = clusters_loopup_name (hd, name, fst_cid, error)
 in
@@ -130,43 +131,62 @@ in
           
           val inode = inode_create_from_dir_entry (dentry)
           // todo "hack here" release all the cloptr
-          val () = rollback_res1_relase (rollback5)
-          val () = rollback_res1_relase (rollback4)
-          val () = rollback_res0_relase (rollback3)
-          val () = rollback_res0_relase (rollback2)
-          val () = rollback_res1_relase (rollback1)
+          val () = rollback_res1_release (pfrb | rollback5)
+          val () = rollback_res1_release (pfrb | rollback4)
+          val () = rollback_res0_release (pfrb | rollback3)
+          val () = rollback_res0_release (pfrb | rollback2)
+          val () = rollback_res1_release (pfrb | rollback1)
           
-          prval () = tag_clear (vtag)
+          prval () = tag_clear (pfrb, vtag)
         in
          option_vt_make (inode)
-        end else let
-        
-       
+        end else if is_fatal (error) then let
           prval vtag = optt_unfail (optt)
           val () = option_vt_removenil (o_rollback)
 
-          val (vtag | ret) = rollback4 (vtag | hd)
+          val (vtag | ()) = rollback_res1_fatalrelease (vtag | rollback4, error)
+          val (vtag | ()) = rollback_res0_fatalrelease (vtag | rollback3, error)
+          val (vtag | ()) = rollback_res0_fatalrelease (vtag | rollback2, error)
+          val (vtag | ()) = rollback_res1_fatalrelease (vtag | rollback1, error)
+          prval () = tag_free (vtag)          
+        in
+          option_vt_nil ()
+        end else let
+          prval vtag = optt_unfail (optt)
+          val () = option_vt_removenil (o_rollback)
+
+          val (vtag | ret) = rollback4 (vtag | hd, error)
           val () = cloptr_free (rollback4)
-          val (vtag | ret) = rollback3 (vtag)
+          val (vtag | ret) = rollback3 (vtag | error)
           val () = cloptr_free (rollback3)
-          val (vtag | ret) = rollback2 (vtag)
+          val (vtag | ret) = rollback2 (vtag | error)
           val () = cloptr_free (rollback2)
-          val (vtag | ret) = rollback1 (vtag | hd)
+          val (vtag | ret) = rollback1 (vtag | hd, error)
           val () = cloptr_free (rollback1)
           prval () = tag_free (vtag)
 
         in
           option_vt_nil ()
         end
+      end else if is_fatal (error) then let
+        prval vtag = optt_unfail (optt)
+        val () = option_vt_removenil (o_rollback)
+
+        val (vtag | ()) = rollback_res0_fatalrelease (vtag | rollback3, error)
+        val (vtag | ()) = rollback_res0_fatalrelease (vtag | rollback2, error)
+        val (vtag | ()) = rollback_res1_fatalrelease (vtag | rollback1, error)
+        prval () = tag_free (vtag)   
+      in
+        option_vt_nil ()
       end else let  // hd_write_inode failed
         prval vtag = optt_unfail (optt)
         val () = option_vt_removenil (o_rollback)
 
-        val (vtag | ret) = rollback3 (vtag)
+        val (vtag | ret) = rollback3 (vtag | error)
         val () = cloptr_free (rollback3)
-        val (vtag | ret) = rollback2 (vtag)
+        val (vtag | ret) = rollback2 (vtag | error)
         val () = cloptr_free (rollback2)
-        val (vtag | ret) = rollback1 (vtag | hd)
+        val (vtag | ret) = rollback1 (vtag | hd, error)
         val () = cloptr_free (rollback1)
         prval () = tag_free (vtag)
 
@@ -184,7 +204,7 @@ in
     end
   end
 end
-     
+
 (* ************** ****************** *)
 
 /* *************************
@@ -195,7 +215,7 @@ end
  *  error: &ecode? >> ecode e
  * ): #[e: int] option_vt (inode, e == 0)
 ** *************************/
-implement inode_dir_lookup_main (dir, name, hd, error) = let
+implement inode_dir_lookup_main (pfrb | dir, name, hd, error) = let
   val fst_cid = inode_get_fst_cluster (dir)
   val o_entry = clusters_loopup_name (hd, name, fst_cid, error)
 in
@@ -212,7 +232,7 @@ in
       option_vt_make (inode)
     end else option_vt_nil ()      
   end else let  // clusters_loopup_name failed
-    val () = ecode_set (error, ECODE_)
+    // val () = ecode_set (error, ECODE_)
   in
     option_vt_nil ()
   end
@@ -229,29 +249,46 @@ end
  *  error: &ecode? >> ecode e
  * ): #[e: int] void
 ** *************************/
-implement msdos_dir_unlink (dir, name, inode, hd, error) = let
+implement msdos_dir_unlink (pfrb | dir, name, inode, hd, error) = let
   val fst_cid = inode_get_fst_cluster (dir)
-  val o_entry = clusters_loopup_name (hd, name, fst_cid, error)  // todo
+  // locate the file
+  val o_entry = clusters_loopup_name (hd, name, fst_cid, error)
 in
   if is_succ (error) then let // file already exists
     val '(cid, bid, eid) = option_getval {'(cluster_id, block_id, dir_entry_id)} (o_entry)
     val blk_no = fat_cluster_id_to_block_id (cid) + bid
     
     prval vtag = tag_create ()
+    // remove the dir_entry
     val (optt | o_rollback, o_entry) = 
       hd_clear_dir_entry (vtag | hd, blk_no, eid, error) 
   in
     if is_succ (error) then let
       prval vtag = optt_unsucc (optt)
-      val rollback1 = option_vt_getval {rollback_hd (1)} (o_rollback)   // todo why must add type here
+      val rollback1 = option_vt_getval {rollback_hd (1)} (o_rollback)
       // update father inode
       val time = get_cur_time ()
       val (vtag | rollback2) = inode_set_time (vtag | dir, time)
-      val file_size = inode_get_file_size (dir)
-
-      val (optt | o_rollback) = hd_write_inode (vtag | hd, dir, error)  // update the inode for "dir"
+      // update the inode for the upper dir
+      val (optt | o_rollback) = hd_write_inode (vtag | hd, dir, error)
     in
       if is_succ (error) then let
+        prval vtag = optt_unsucc (optt)
+        val rollback1 = option_vt_getval {rollback_hd (2)} (o_rollback)
+        
+        // release the content of the file
+        val (optt | ()) = clusters_release_norb (vtag, pfrb | hd, fst_cid, error)
+      in 
+      end else if is_fatal (error) then let
+        prval vtag = optt_unfail (optt)
+        val () = option_vt_removenil (o_rollback)
+      in
+      end else let
+      in
+      end
+
+        
+        //
         
       
     

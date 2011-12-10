@@ -81,6 +81,37 @@ absviewtype hd  // hard disk
 viewtypedef rollback (n: int) = rollback_res0 (n)
 viewtypedef rollback_hd (n: int) = rollback_res1 (hd, n)
 
+
+
+
+#define MAX_NAME 8
+// typedef name = [xs: seq] (seq_len (xs, MAX_NAME) | seq (char, xs))
+typedef name = seq char
+fun validate_name (n: name): bool (* =
+  (seq_len n) == MAX_NAME
+*)
+
+
+// #define DIR_ENTRYS_PER_BLOCK (BLK_SZ / DIR_ENTRY_LEN)
+// todo to change back
+#define DIR_ENTRYS_PER_BLOCK 16
+
+typedef dir_entry_id = [i: nat | i < DIR_ENTRYS_PER_BLOCK] int i
+
+#define DIR_ENTRY_LEN 32
+typedef dir_entry = seq char
+fun validate_dir_entry (d: dir_entry): bool (* =
+  (seq_len d) == DIR_ENTRY_LEN
+*)
+
+typedef file_sz = [i: nat] int i
+
+#define FILE_TYPE_DIR 1
+#define FILE_TYPE_FILE 2
+typedef file_type = [n: int | n == FILE_TYPE_DIR || n == FILE_TYPE_FILE] int n
+fun validate_file_type (t: file_type): bool
+
+
 (* ************** ****************** *)
 (* hd operation *)
 // similar to superblock, from hd we can know anything
@@ -133,32 +164,6 @@ fun hd_write_inode {n: nat} (pf: tag (n) |
 
 (* ************** ****************** *)
 
-#define MAX_NAME 8
-// typedef name = [xs: seq] (seq_len (xs, MAX_NAME) | seq (char, xs))
-typedef name = seq char
-fun validate_name (n: name): bool (* =
-  (seq_len n) == MAX_NAME
-*)
-
-
-// #define DIR_ENTRYS_PER_BLOCK (BLK_SZ / DIR_ENTRY_LEN)
-// todo to change back
-#define DIR_ENTRYS_PER_BLOCK 16
-
-typedef dir_entry_id = [i: nat | i < DIR_ENTRYS_PER_BLOCK] int i
-
-#define DIR_ENTRY_LEN 32
-typedef dir_entry = seq char
-fun validate_dir_entry (d: dir_entry): bool (* =
-  (seq_len d) == DIR_ENTRY_LEN
-*)
-
-typedef file_sz = [i: nat] int i
-
-#define FILE_TYPE_DIR 1
-#define FILE_TYPE_FILE 2
-typedef file_type = [n: int | n == FILE_TYPE_DIR || n == FILE_TYPE_FILE] int n
-fun validate_file_type (t: file_type): bool
 
 (* ************** ****************** *)
 
@@ -253,9 +258,8 @@ if (start >= 1 && start <= FAT_SZ) || start = FAT_ENT_EOF
 then true else false
 *)
 
-fun clusters_release {n: nat} (pf: tag (n) | 
-  hd: !hd, start: cluster_id, error: &ecode? >> ecode (e)): #[e: int] (opt_tag (n, e) | 
-  option_vt (rollback_hd (n+1), e == 0))
+fun clusters_release_norb {n: nat} (pf: tag (n), pfrb: norollback | 
+  hd: !hd, start: cluster_id, error: &ecode? >> ecode (e)): #[e: int] (opt_tag (n, e) | void)
 
 fun blocks_loopup_name {k: nat | k < BLKS_PER_CLS}(hd: !hd, name: name, cur: block_id, k: int k, error: &ecode? >> ecode (e)): #[e: int] 
   option ('(block_id, dir_entry_id), e == 0)
@@ -290,10 +294,7 @@ fun clusters_find_empty_entry_new_precond (
 	start: cluster_id, 
 	error: &ecode?
 ): bool (* =
-	
-
 *)
-
 
 /* *************************
  * Function Name: clusters_find_empty_entry_new
@@ -330,9 +331,9 @@ fun clusters_find_last_post (hd: !hd, start: cluster_id): bool (*=
 // int inode_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
 // nd seems uselsss
 // precond:
-fun inode_dir_create (dir: !inode, name: name, mode: mode, hd: !hd, error: &ecode? >> ecode (e)): #[e:int] option_vt (inode, e == 0)
-fun inode_dir_create_main (dir: !inode, name: name, mode: mode, hd: !hd, error: &ecode? >> ecode (e)): #[e:int] option_vt (inode, e == 0)
-fun inode_dir_create_pre (dir: !inode, name: name, mode: mode, hd: !hd, error: &ecode?): bool
+fun inode_dir_create (pfrb: norollback | dir: !inode, name: name, mode: mode, hd: !hd, error: &ecode? >> ecode (e)): #[e:int] option_vt (inode, e == 0)
+fun inode_dir_create_main (pfrb: norollback | dir: !inode, name: name, mode: mode, hd: !hd, error: &ecode? >> ecode (e)): #[e:int] option_vt (inode, e == 0)
+fun inode_dir_create_pre (pfrb: norollback | dir: !inode, name: name, mode: mode, hd: !hd, error: &ecode?): bool
 (*
 let
   val t = inode_get_file_type (inode)
@@ -344,8 +345,8 @@ end
 
 // struct dentry *inode_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nd)
 // nd seems useless
-fun inode_dir_lookup_main (dir: !inode, name: name, hd: !hd, error: &ecode? >> ecode e): #[e: int] option_vt (inode, e == 0)
-fun inode_dir_loopup_pre (dir: !inode, name: name, hd: !hd, error: &ecode?): bool (* =
+fun inode_dir_lookup_main (pfrb: norollback | dir: !inode, name: name, hd: !hd, error: &ecode? >> ecode e): #[e: int] option_vt (inode, e == 0)
+fun inode_dir_loopup_pre (pfrb: norollback | dir: !inode, name: name, hd: !hd, error: &ecode?): bool (* =
 let
   val t = inode_get_file_type (inode)
 in
@@ -354,7 +355,7 @@ end
 *)
 
 // int msdos_unlink(struct inode *dir, struct dentry *dentry)
-fun msdos_dir_unlink (dir: !inode, name: name, file: !inode, hd: !hd, error: &ecode? >> ecode e): #[e: int] void
+fun msdos_dir_unlink (pfrb: norollback | dir: !inode, name: name, file: !inode, hd: !hd, error: &ecode? >> ecode e): #[e: int] void
 
 // int (*mkdir) (struct inode *,struct dentry *,int);
 // int (*rmdir) (struct inode *,struct dentry *);

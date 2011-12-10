@@ -12,32 +12,35 @@ staload "error_handle.sats"
 
 absviewtype resource
 
+viewtypedef rollback (n: int) = rollback_res0 (n)
+viewtypedef rollback_res (n: int) = rollback_res1 (resource, n)
+
 extern fun operation2_1 {n:nat} (pf: tag n 
   | x: !resource,
-  e: &ecode? >> ecode (e))
+  e: &ecode_i >> ecode (e))
   :<1> #[e: int] (
   opt_tag (n, e) 
   | option_vt (
-      rollback_res1 (resource, n+1), e == 0)
+      rollback_res (n+1), e == 0)
   )
 
 extern fun operation2_2 {n:nat} (pf: tag n 
   | x: !resource,
-  e: &ecode? >> ecode (e))
+  e: &ecode_i >> ecode (e))
   :<1> #[e: int] (
   opt_tag (n, e) 
   | option_vt (
-      rollback_res1 (resource, n+1), e == 0)
+      rollback_res (n+1), e == 0)
   )
 
 
 fun operation2 {n:nat} .<>. (vtag: tag n 
   | x: !resource,
-  e: &ecode? >> ecode (e))
+  e: &ecode_i >> ecode (e))
   :<1> #[e: int] (
   opt_tag (n, e) 
   | option_vt (
-      ((tag (n+1) | !resource) -<lin, cloptr1> (tag n | int)), e == 0)
+      rollback_res (n+1), e == 0)
   ) = let
   prval vtag0 = tag_create ()
   val (opt_vtag1 | opt_f1) = operation2_1 (vtag0 | x, e)
@@ -54,10 +57,10 @@ in
       prval opt_vtag' = optt_succ (vtag')
 
       // vtag2, vf1, vf2, fpf needs to be consumed
-      val rollback = llam (pf:tag (n+1) | x: !resource) =<lin,cloptr1> (let
-        val (vtag1 | ret) = vf2 (vtag2 | x)
+      val rollback = llam (pf:tag (n+1) | x: !resource, e: ecode_e) =<lin,cloptr1> (let
+        val (vtag1 | ret) = vf2 (vtag2 | x, e)
         val () = cloptr_free (vf2)
-        val (vtag0 | ret) = vf1 (vtag1 | x)
+        val (vtag0 | ret) = vf1 (vtag1 | x, e)
         val () = cloptr_free (vf1)
         prval () = tag_free (vtag0)
         
@@ -67,19 +70,26 @@ in
       end):(tag n | int) 
     in
       (opt_vtag' | Some_vt (rollback))
-    end else let
+    end else if is_fatal (e) then let
+      val ~None_vt () = opt_f2
       prval vtag1 = optt_unfail (opt_vtag2)
-      val (vtag0 | ret) = vf1 (vtag1 | x)
+      val (vtag0 | ()) = rollback_res1_fatalrelease (vtag1 | vf1, e)
+      prval () = tag_free (vtag0)
+    in
+      (optt_fail (vtag) | None_vt ())
+    end else let
+      val ~None_vt () = opt_f2
+      prval vtag1 = optt_unfail (opt_vtag2)
+      val (vtag0 | ret) = vf1 (vtag1 | x, e)
       val () = cloptr_free (vf1)
       prval () = tag_free (vtag0)
-      val ~None_vt () = opt_f2
     in
       (optt_fail (vtag) | None_vt ())
     end
   end else let
+    val ~None_vt () = opt_f1
     prval vtag0 = optt_unfail (opt_vtag1)
     prval () = tag_free (vtag0)
-    val ~None_vt () = opt_f1
   in
     (optt_fail (vtag) | None_vt ())
   end
