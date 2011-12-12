@@ -57,7 +57,7 @@ in
       prval opt_vtag' = optt_succ (vtag')
 
       // vtag2, vf1, vf2, fpf needs to be consumed
-      val rollback = llam (pf:tag (n+1) | x: !resource, e: ecode_e) =<lin,cloptr1> (let
+      val rollback = llam (pf:tag (n+1) | x: !resource, e: ecode) =<lin,cloptr1> (let
         val (vtag1 | ret) = vf2 (vtag2 | x, e)
         val () = cloptr_free (vf2)
         val (vtag0 | ret) = vf1 (vtag1 | x, e)
@@ -70,13 +70,6 @@ in
       end):(tag n | int) 
     in
       (opt_vtag' | Some_vt (rollback))
-    end else if is_fatal (e) then let
-      val ~None_vt () = opt_f2
-      prval vtag1 = optt_unfail (opt_vtag2)
-      val (vtag0 | ()) = rollback_res1_fatalrelease (vtag1 | vf1, e)
-      prval () = tag_free (vtag0)
-    in
-      (optt_fail (vtag) | None_vt ())
     end else let
       val ~None_vt () = opt_f2
       prval vtag1 = optt_unfail (opt_vtag2)

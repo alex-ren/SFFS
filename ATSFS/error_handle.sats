@@ -9,9 +9,16 @@ abst@ype error_code (e: int) = int
 typedef ecode (e: int) = error_code (e)
 typedef ecode = [e: int] ecode (e)
 
-#define ECODE_FATAL ~1
+
+#define ECODE_OK 0
+#define ECODE_IO 1
+#define ECODE_FILE_EXIST 2
+#define ECODE_FILE_NOTEXIST 3
+
+#define ECODE_FATAL ECODE_IO
+
 typedef ecode_i = [e: int | e <> ECODE_FATAL] ecode (e)
-typedef ecode_e = [e: int | e <> 0 && e <> ECODE_FATAL] ecode (e)
+//typedef ecode_e = [e: int | e <> 0 && e <> ECODE_FATAL] ecode (e)
 
 fun ecode_is_succ {e: int} (e: ecode (e)):<> bool (e == 0)
 #define is_succ ecode_is_succ
@@ -19,7 +26,7 @@ fun ecode_is_succ {e: int} (e: ecode (e)):<> bool (e == 0)
 fun ecode_is_fatal {e: int} (e: ecode (e)):<> bool (e == ECODE_FATAL)
 #define is_fatal ecode_is_fatal
 
-fun ecode_get {e: int} (err: &ecode e): int e
+//fun ecode_get {e: int} (err: &ecode e): int e
 fun ecode_set {e: int} (err: &ecode_i >> ecode (e), v: int e): void
 
 absview tag (n: int)

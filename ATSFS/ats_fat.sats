@@ -34,6 +34,8 @@
 staload "ats_spec.sats"
 staload "error_handle.sats"
  
+
+
 //absviewtype superblock
 // this kind of inode is totally in the memory
 absviewtype inode
@@ -150,7 +152,6 @@ fun hd_clear_dir_entry {n:nat} (pf: tag (n) |
     hd: !hd, 
     blkid: block_id, 
     entryid: dir_entry_id, 
-    entry: dir_entry, 
     error: &ecode? >> ecode (e)
 ): #[e: int] (opt_tag (n, e) | option_vt (rollback_hd (n+1), e == 0))
 
@@ -245,7 +246,9 @@ fun fat_cluster_id_to_block_id_precond (clsid: cluster_id): block_id (* =
 *)
 
 fun clusters_loopup_name
-  (hd: !hd, name: name, start: cluster_id, error: &ecode? >> ecode (e)): #[e: int] 
+  (hd: !hd, name: name, start: cluster_id, error: &ecode? >> ecode (e)): #[e: int | 
+  	e==0 || e==ECODE_FILE_NOTEXIST || e==ECODE_IO
+  ] 
   option ('(cluster_id, block_id, dir_entry_id), e == 0)
 
 fun clusters_loopup_name_main
@@ -258,8 +261,8 @@ if (start >= 1 && start <= FAT_SZ) || start = FAT_ENT_EOF
 then true else false
 *)
 
-fun clusters_release_norb {n: nat} (pf: tag (n), pfrb: norollback | 
-  hd: !hd, start: cluster_id, error: &ecode? >> ecode (e)): #[e: int] (opt_tag (n, e) | void)
+fun clusters_release_norb (
+  hd: !hd, start: cluster_id, error: &ecode? >> ecode (e)): #[e: int] void
 
 fun blocks_loopup_name {k: nat | k < BLKS_PER_CLS}(hd: !hd, name: name, cur: block_id, k: int k, error: &ecode? >> ecode (e)): #[e: int] 
   option ('(block_id, dir_entry_id), e == 0)
@@ -316,8 +319,6 @@ fun clusters_find_last_post (hd: !hd, start: cluster_id): bool (*=
 
 (* VFS function *)
 
-#define ECODE_OK 0
-#define ECODE_ 1
 
 
 
@@ -331,9 +332,9 @@ fun clusters_find_last_post (hd: !hd, start: cluster_id): bool (*=
 // int inode_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
 // nd seems uselsss
 // precond:
-fun inode_dir_create (pfrb: norollback | dir: !inode, name: name, mode: mode, hd: !hd, error: &ecode? >> ecode (e)): #[e:int] option_vt (inode, e == 0)
-fun inode_dir_create_main (pfrb: norollback | dir: !inode, name: name, mode: mode, hd: !hd, error: &ecode? >> ecode (e)): #[e:int] option_vt (inode, e == 0)
-fun inode_dir_create_pre (pfrb: norollback | dir: !inode, name: name, mode: mode, hd: !hd, error: &ecode?): bool
+fun inode_dir_create (dir: !inode, name: name, mode: mode, hd: !hd, error: &ecode? >> ecode (e)): #[e:int] option_vt (inode, e == 0)
+fun inode_dir_create_main (dir: !inode, name: name, mode: mode, hd: !hd, error: &ecode? >> ecode (e)): #[e:int] option_vt (inode, e == 0)
+fun inode_dir_create_pre (dir: !inode, name: name, mode: mode, hd: !hd, error: &ecode?): bool
 (*
 let
   val t = inode_get_file_type (inode)
@@ -345,8 +346,8 @@ end
 
 // struct dentry *inode_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nd)
 // nd seems useless
-fun inode_dir_lookup_main (pfrb: norollback | dir: !inode, name: name, hd: !hd, error: &ecode? >> ecode e): #[e: int] option_vt (inode, e == 0)
-fun inode_dir_loopup_pre (pfrb: norollback | dir: !inode, name: name, hd: !hd, error: &ecode?): bool (* =
+fun inode_dir_lookup_main (dir: !inode, name: name, hd: !hd, error: &ecode? >> ecode e): #[e: int] option_vt (inode, e == 0)
+fun inode_dir_loopup_pre (dir: !inode, name: name, hd: !hd, error: &ecode?): bool (* =
 let
   val t = inode_get_file_type (inode)
 in
@@ -355,7 +356,7 @@ end
 *)
 
 // int msdos_unlink(struct inode *dir, struct dentry *dentry)
-fun msdos_dir_unlink (pfrb: norollback | dir: !inode, name: name, file: !inode, hd: !hd, error: &ecode? >> ecode e): #[e: int] void
+fun msdos_dir_unlink (dir: !inode, name: name, file: !inode, hd: !hd, error: &ecode? >> ecode e): #[e: int] void
 
 // int (*mkdir) (struct inode *,struct dentry *,int);
 // int (*rmdir) (struct inode *,struct dentry *);
