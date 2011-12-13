@@ -41,6 +41,8 @@ staload "error_handle.sats"
 absviewtype inode
 //absviewtype dentry
 
+fun inode_mutex_islocked (i: !inode): bool
+
 abst@ype mode
 
 abst@ype time
@@ -69,6 +71,10 @@ fun validate_block (b: block): bool (* =
 *)
 
 #define BLKS_PER_CLS 4
+#define CLS_PER_PAGE 2
+
+#define PAGE_SIZE BLK_SZ * BLKS_PER_CLS * CLS_PER_PAGE
+
 typedef cluster_id = [i: pos | i <= FAT_SZ || i == FAT_ENT_FREE || i == FAT_ENT_EOF || i == FAT_ENT_BAD] int i
 typedef cluster = seq block
 fun validate_cluster (c: cluster): bool (* =
@@ -165,6 +171,15 @@ fun hd_write_inode {n: nat} (pf: tag (n) |
 
 (* ************** ****************** *)
 
+fun fat_clusters_length (hd: !hd, start_cls: cluster_id): int
+
+fun fat_alloc_cluster {n: nat} (
+	pf: tag (n) | hd: !hd, n: int, error: &ecode? >> ecode e
+): #[e: int] (opt_tag (n, e) | option ('(cluster_id), e == 0), option_vt (rollback_hd (n+1), e == 0))
+
+fun fat_alloc_cluster_pre (hd: !hd, n: int, error: &ecode?): bool
+
+fun fat_alloc_cluster_post {e: int} (hd: !hd, n: int, error: ecode e, ret: option ('(cluster_id), e==0)): bool
 
 (* ************** ****************** *)
 
@@ -209,7 +224,10 @@ fun inode_set_file_size {n: nat} (pf: tag (n) | inode: !inode, sz: file_sz): (ta
 (* external function *)
 fun inode_set_time {n: nat} (pf: tag (n) | inode: !inode, time: time): (tag (n+1) | rollback (n+1))
 
-
+fun inode_get_entry_loc (i: !inode, error: &ecode? >> ecode (e)): #[e:int | 
+	e==0 || e==ECODE_FILE_NOTEXIST
+	]  
+	option ('(cluster_id, block_id, dir_entry_id), e == 0)
 
 
 (* ************** ****************** *)
@@ -276,6 +294,32 @@ fun clusters_find_empty_entry {k: nat | k > 0 && k <= FAT_SZ}
   option ('(cluster_id, block_id, dir_entry_id), e == 0)
 
 
+
+/*
+ * Function Name: fjei
+ * Input:
+ * Desc:
+ * */
+ 
+
+
+
+
+
+/* *************************
+ * fun inode_dir_mkdir_pre (
+ * 	dir: !inode, 
+ *  name: name, 
+ *  hd: !hd, 
+ *  error: &ecode?
+ * ): bool
+** *************************/
+
+/* *************************
+ * Function Name: dd
+ * Input:
+ * Desc:
+** *************************/
 /* *************************
  * Function Name: clusters_find_empty_entry_new
  * Desc: locate the dir entry if possible, allocate new cluster to hold
@@ -329,40 +373,42 @@ fun clusters_find_last_post (hd: !hd, start: cluster_id): bool (*=
 // The following operations are related to inode_operations, we need wrapper around these functions
 // to handle dentry (d_instantiate, d_clear...). Also I assume that a global lock is held inside the wrapper.
 
-// int inode_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
+
+// create a file
+// int msdos_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
 // nd seems uselsss
-// precond:
 fun inode_dir_create (dir: !inode, name: name, mode: mode, hd: !hd, error: &ecode? >> ecode (e)): #[e:int] option_vt (inode, e == 0)
 fun inode_dir_create_main (dir: !inode, name: name, mode: mode, hd: !hd, error: &ecode? >> ecode (e)): #[e:int] option_vt (inode, e == 0)
 fun inode_dir_create_pre (dir: !inode, name: name, mode: mode, hd: !hd, error: &ecode?): bool
-(*
-let
-  val t = inode_get_file_type (inode)
-in
-  t = FILE_TYPE_DIR
-end
-*)
 
 
-// struct dentry *inode_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nd)
+// Get inode using directory and name
+// struct dentry *msdos_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nd)d)
 // nd seems useless
+fun inode_dir_lookup (dir: !inode, name: name, hd: !hd, error: &ecode? >> ecode e): #[e: int] option_vt (inode, e == 0)
 fun inode_dir_lookup_main (dir: !inode, name: name, hd: !hd, error: &ecode? >> ecode e): #[e: int] option_vt (inode, e == 0)
-fun inode_dir_loopup_pre (dir: !inode, name: name, hd: !hd, error: &ecode?): bool (* =
-let
-  val t = inode_get_file_type (inode)
-in
-  t = FILE_TYPE_DIR
-end
-*)
+fun inode_dir_loopup_pre (dir: !inode, name: name, hd: !hd, error: &ecode?): bool
 
+
+// Unlink a file 
 // int msdos_unlink(struct inode *dir, struct dentry *dentry)
-fun msdos_dir_unlink (dir: !inode, name: name, file: !inode, hd: !hd, error: &ecode? >> ecode e): #[e: int] void
+fun msdos_dir_unlink (dir: !inode, file: !inode, hd: !hd, error: &ecode? >> ecode e): #[e: int] void
+fun msdos_dir_unlink_main (dir: !inode, file: !inode, hd: !hd, error: &ecode? >> ecode e): #[e: int] void
+fun msdos_dir_unlink_pre (dir: !inode, file: !inode, hd: !hd, error: &ecode?): bool
+//todo: refer to fat/namei_msdos.c, we still need to do many things related to the VFS' inode
+//clear_nlink(inode);
+//inode->i_ctime = CURRENT_TIME_SEC;
+//fat_detach(inode);
 
-// int (*mkdir) (struct inode *,struct dentry *,int);
-// int (*rmdir) (struct inode *,struct dentry *);
-// int (*rename) (struct inode *, struct dentry *, struct inode *, struct dentry *);
 
-
+// Make a directory
+// int msdos_mkdir(struct inode *dir, struct dentry *dentry, int mode)
+fun inode_dir_mkdir_main (dir: !inode, name: name, hd: !hd, error: &ecode? >> ecode e): #[e: int] option_vt (inode, e == 0)
+fun inode_dir_mkdir_pre (dir: !inode, name: name, hd: !hd, error: &ecode?): bool
+//todo: refer to fat/namei_msdos.c, we still need to do many things related to the VFS' inode
+//inc_nlink(dir);
+//inode->i_nlink = 2;
+//d_instantiate(dentry, inode);
 
 (* ************** ****************** *)
 // The following operations are related to file_operations

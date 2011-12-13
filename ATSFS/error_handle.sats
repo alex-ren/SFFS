@@ -15,6 +15,7 @@ typedef ecode = [e: int] ecode (e)
 #define ECODE_FILE_EXIST 2
 #define ECODE_FILE_NOTEXIST 3
 
+
 #define ECODE_FATAL ECODE_IO
 
 typedef ecode_i = [e: int | e <> ECODE_FATAL] ecode (e)
@@ -54,6 +55,7 @@ viewtypedef rollback_res0 (n: int) =
 viewtypedef rollback_res1 (vt: viewtype, n: int) = 
         (tag n | !vt, ecode) -<lin, cloptr1> (tag (n-1) | int)
         
+fun abort {a: viewt@ype} (err: int):<!exn> a
 
 ////
 fun rollback_res0_fatalrelease {n:nat} (
