@@ -9,14 +9,15 @@ abst@ype error_code (e: int) = int
 typedef ecode (e: int) = error_code (e)
 typedef ecode = [e: int] ecode (e)
 
-
+// include/asm-generic/errno-base.h
+// include/asm-generic/errno.h
 #define ECODE_OK 0
-#define ECODE_IO 1
-#define ECODE_FILE_EXIST 2
-#define ECODE_FILE_NOTEXIST 3
+#define ENOENT       2  /* No such file or directory */
+#define EIO      5  /* I/O error */
+#define EEXIST      17  /* File exists */
+#define ENOTEMPTY   39  /* Directory not empty */
 
-
-#define ECODE_FATAL ECODE_IO
+#define ECODE_FATAL EIO  // todo this is my own definition
 
 typedef ecode_i = [e: int | e <> ECODE_FATAL] ecode (e)
 //typedef ecode_e = [e: int | e <> 0 && e <> ECODE_FATAL] ecode (e)

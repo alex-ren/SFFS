@@ -225,10 +225,11 @@ fun inode_set_file_size {n: nat} (pf: tag (n) | inode: !inode, sz: file_sz): (ta
 fun inode_set_time {n: nat} (pf: tag (n) | inode: !inode, time: time): (tag (n+1) | rollback (n+1))
 
 fun inode_get_entry_loc (i: !inode, error: &ecode? >> ecode (e)): #[e:int | 
-	e==0 || e==ECODE_FILE_NOTEXIST
+	e==0 || e==ENOENT
 	]  
 	option ('(cluster_id, block_id, dir_entry_id), e == 0)
 
+fun inode_clear_entry_loc (i: !inode): void
 
 (* ************** ****************** *)
 
@@ -265,7 +266,7 @@ fun fat_cluster_id_to_block_id_precond (clsid: cluster_id): block_id (* =
 
 fun clusters_loopup_name
   (hd: !hd, name: name, start: cluster_id, error: &ecode? >> ecode (e)): #[e: int | 
-  	e==0 || e==ECODE_FILE_NOTEXIST || e==ECODE_IO
+  	e==0 || e==ENOENT || e==EIO
   ] 
   option ('(cluster_id, block_id, dir_entry_id), e == 0)
 
@@ -288,44 +289,21 @@ fun blocks_loopup_name {k: nat | k < BLKS_PER_CLS}(hd: !hd, name: name, cur: blo
 fun block_loopup_name (blk: block, name: name, error: &ecode? >> ecode (e)): #[e: int] 
   option (dir_entry_id, e == 0)
 
+fun clusters_dir_empty
+(hd: !hd, start: cluster_id, error: &ecode? >> ecode (e)): #[e: int] option ('(bool), e==0)
 
 fun clusters_find_empty_entry {k: nat | k > 0 && k <= FAT_SZ} 
 (hd: !hd, start: cluster_id, k: int k, error: &ecode? >> ecode (e)): #[e: int] 
   option ('(cluster_id, block_id, dir_entry_id), e == 0)
 
 
-
 /*
- * Function Name: fjei
- * Input:
- * Desc:
- * */
- 
-
-
-
-
-
-/* *************************
- * fun inode_dir_mkdir_pre (
- * 	dir: !inode, 
- *  name: name, 
- *  hd: !hd, 
- *  error: &ecode?
- * ): bool
-** *************************/
-
-/* *************************
- * Function Name: dd
- * Input:
- * Desc:
-** *************************/
-/* *************************
  * Function Name: clusters_find_empty_entry_new
+ * Input:
  * Desc: locate the dir entry if possible, allocate new cluster to hold
  *   new dir entry if necessary
- * 
-** *************************/
+ * */
+
 fun clusters_find_empty_entry_new {n: nat} (pf: tag n | 
 	hd: !hd, 
 	start: cluster_id, 
@@ -343,11 +321,7 @@ fun clusters_find_empty_entry_new_precond (
 ): bool (* =
 *)
 
-/* *************************
- * Function Name: clusters_find_empty_entry_new
- * Desc: add one cluster to the chain if possible
- * 
-** *************************/
+
 fun clusters_add_one (hd: !hd, start: cluster_id, error: &ecode? >> ecode (e)): #[e: int] option (cluster_id, e == 0)
 
 fun fs_allocate_cluster (hd: !hd, error: &ecode? >> ecode (e)): #[e: int] option (cluster_id, e == 0)
@@ -409,6 +383,10 @@ fun inode_dir_mkdir_pre (dir: !inode, name: name, hd: !hd, error: &ecode?): bool
 //inc_nlink(dir);
 //inode->i_nlink = 2;
 //d_instantiate(dentry, inode);
+
+// int msdos_rmdir(struct inode *dir, struct dentry *dentry)
+fun inode_dir_rmdir_main (dir: !inode, dirfile: !inode, hd: !hd, error: &ecode? >> ecode e): #[e: int] void
+fun inode_dir_rmdir_pre (dir: !inode, dirfile: !inode, hd: !hd, error: &ecode?): bool
 
 (* ************** ****************** *)
 // The following operations are related to file_operations

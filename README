@@ -1,9 +1,23 @@
 ATS File System Related
 
+==========================
+-- This branch is 2.6.32-35, which means that the code is supposed to run on v2.6.32-35. 
+When I write the code, the Linux kernel source code I refer to is actuall v2.6.32-34.
+
+==========================
+-- Directory illustrated
 -- ATSFS
   ats code for file system
 
 -- TESTFS
   C code for learning linux kernel with file system.
+
+-- ats_spec
+  file used for specification in ATS
+
+==========================
+To start with, create a symbolic link in ATSFS to ats_spec/ats_spec.sats
+
+==========================
 
 

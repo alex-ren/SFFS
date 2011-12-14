@@ -284,7 +284,7 @@ if inode_mutex_islocked (dir) && inode_mutex_islocked (inode) then let
   val t_file = inode_get_file_type (inode)
 in
   if t_dir = FILE_TYPE_DIR && t_file = FILE_TYPE_FILE then let
-    val o_entry = inode_get_entry_loc (dir, error)
+    val o_entry = inode_get_entry_loc (inode, error)
   in
     if is_succ (error) then true else false
   end else false
@@ -302,7 +302,7 @@ end else false
 implement msdos_dir_unlink_main (dir, inode, hd, error) = let
   val o_entry = inode_get_entry_loc (inode, error)
 in
-  if is_succ (error) then let // file already exists
+  if is_succ (error) then let
     val '(cid, bid, eid) = option_getval {'(cluster_id, block_id, dir_entry_id)} (o_entry)
     val blk_no = fat_cluster_id_to_block_id (cid) + bid
     
@@ -329,6 +329,10 @@ in
         // dentry in VFS will be deleted by by certain outer function.
         // Therefore we don't clear the content of the file here since
         // someone else may be using the file now.
+        // But we neeed to clear the entry location stored inside the
+        // inode, so that the read/write operation won't update the dir
+        // entry for this inode any more.        
+        val () = inode_clear_entry_loc (inode)
         
         val (vtag | ret) = rollback3 (vtag | hd, error)
         val () = cloptr_free (rollback3)        
@@ -500,10 +504,106 @@ in
   end
 end
 
+/* *************************
+ * fun inode_dir_rmdir_pre (
+ * 	dir: !inode, 
+ *  dirfile: !inode, 
+ *  error: &ecode?
+ * ): bool
+** *************************/
+implement inode_dir_rmdir_pre (dir, dirfile, hd, error) =
+if inode_mutex_islocked (dir) && inode_mutex_islocked (dirfile) then let
+  val t_dir = inode_get_file_type (dir)
+  val t_dirfile = inode_get_file_type (dirfile)
+in
+  if t_dir = FILE_TYPE_DIR && t_dirfile = FILE_TYPE_DIR then let
+    val o_entry = inode_get_entry_loc (dirfile, error)
+  in
+    if is_succ (error) then true else false
+  end else false
+end else false
 
+/* *************************
+ * fun inode_dir_rmdir_main (
+ * 	dir: !inode, 
+ *  dirfile: !inode, 
+ *  error: &ecode? >> ecode e
+ * ): #[e: int] void
+** *************************/
+implement inode_dir_rmdir_main (dir, dirfile, hd, error) = let
+  val fst_cid = inode_get_fst_cluster (dirfile)
+  val o_isempty = clusters_dir_empty (hd, fst_cid, error)
+in
+  if is_succ (error) then let
+    val '(isempty) = option_getval (o_isempty)
+  in
+    if isempty then let
+      val o_entry = inode_get_entry_loc (dirfile, error)
+    in
+      if is_succ (error) then let
+        val '(cid, bid, eid) = option_getval {'(cluster_id, block_id, dir_entry_id)} (o_entry)
+        val blk_no = fat_cluster_id_to_block_id (cid) + bid
+    
+        prval vtag = tag_create ()
+        // remove the dir_entry
+        val (optt | o_rollback) = 
+          hd_clear_dir_entry (vtag | hd, blk_no, eid, error) 
+      in
+         if is_succ (error) then let
+          prval vtag = optt_unsucc (optt)
+          val rollback1 = option_vt_getval {rollback_hd (1)} (o_rollback)
+          // update father inode
+          val time = get_cur_time ()
+          val (vtag | rollback2) = inode_set_time (vtag | dir, time)
+          // update the inode for the upper dir
+          val (optt | o_rollback) = hd_write_inode (vtag | hd, dir, error)
+        in
+          if is_succ (error) then let
+            prval vtag = optt_unsucc (optt)
+            val rollback3 = option_vt_getval {rollback_hd (3)} (o_rollback)
 
-
-
+            // file still exists, but it cannot be lookuped anymore
+            // because the dir_entry on the disk is removed. And corresponding
+            // dentry in VFS will be deleted by by certain outer function.
+            // Therefore we don't clear the content of the file here since
+            // someone else may be using the file now.
+            // But we neeed to clear the entry location stored inside the
+            // inode, so that the read/write operation won't update the dir
+            // entry for this inode any more.        
+            val () = inode_clear_entry_loc (dirfile)
+        
+            val (vtag | ret) = rollback3 (vtag | hd, error)
+            val () = cloptr_free (rollback3)        
+            val (vtag | ret) = rollback2 (vtag | error)
+            val () = cloptr_free (rollback2)        
+            val (vtag | ret) = rollback1 (vtag | hd, error)
+            val () = cloptr_free (rollback1)
+            prval () = tag_free (vtag) 
+          in 
+          end else let  // hd_write_inode () failed
+            prval vtag = optt_unfail (optt)
+            val () = option_vt_removenil (o_rollback)
+            val (vtag | ret) = rollback2 (vtag | error)
+            val () = cloptr_free (rollback2)
+            val (vtag | ret) = rollback1 (vtag | hd, error)
+            val () = cloptr_free (rollback1)
+            prval () = tag_free (vtag)        
+          in end
+        end else let // hd_clear_dir_entry () failed
+          prval vtag = optt_unfail (optt)
+          val () = option_vt_removenil (o_rollback)
+          prval () = tag_free (vtag)
+        in
+        end
+      end else let  // inode_get_entry_loc () failed  // todo this will not happen
+      in 
+        abort (1) 
+      end
+    end else let
+      val () = ecode_set (error, ENOTEMPTY)
+    in end
+  end
+end
 
 
 
