@@ -332,8 +332,10 @@ in
         // But we neeed to clear the entry location stored inside the
         // inode, so that the read/write operation won't update the dir
         // entry for this inode any more.        
-        val () = inode_clear_entry_loc (inode)
+        val (vtag | rollback4) = inode_clear_entry_loc (vtag | inode)
         
+        val (vtag | ret) = rollback4 (vtag | error)
+        val () = cloptr_free (rollback4)        
         val (vtag | ret) = rollback3 (vtag | hd, error)
         val () = cloptr_free (rollback3)        
         val (vtag | ret) = rollback2 (vtag | error)
@@ -570,8 +572,10 @@ in
             // But we neeed to clear the entry location stored inside the
             // inode, so that the read/write operation won't update the dir
             // entry for this inode any more.        
-            val () = inode_clear_entry_loc (dirfile)
+            val (vtag | rollback4) = inode_clear_entry_loc (vtag | dirfile)
         
+            val (vtag | ret) = rollback4 (vtag | error)
+            val () = cloptr_free (rollback4)   
             val (vtag | ret) = rollback3 (vtag | hd, error)
             val () = cloptr_free (rollback3)        
             val (vtag | ret) = rollback2 (vtag | error)
@@ -605,9 +609,158 @@ in
   end
 end
 
+/* *************************
+ * fun inode_dir_rename (
+ * 	old_dir: !inode, 
+ *  old_ent: !inode, 
+ *  new_dir: !inode, 
+ *  new_ent: !option0_vt (inode), 
+	error: &ecode? >> ecode e
+): #[e: int] void
+** *************************/
+// todo I didn't mention here that old_dir and new_dir are not the ancestor of each other.
+implement inode_dir_rename_pre (old_dir, old_ent, new_dir, opt_new_ent, opt_name, hd, error) =
+if  inode_mutex_islocked (old_dir) &&  inode_mutex_islocked (new_dir) then let
+  val o_entry = inode_get_entry_loc (old_ent, error)
+in
+  if is_succ (error) then
+    if option_vt_isnil (opt_new_ent) then let
+      val name = option_getval (opt_name)
+      val opt_inode = inode_dir_lookup (new_dir, name, hd, error)
+      extern fun __release {b: bool}(i: option_vt (inode, b)): void
+      val () = __release (opt_inode)
+    in
+      if is_succ (error) then false else true
+    end else let
+      val new_ent = option_vt_getval {inode} (opt_new_ent)
+      val old_type = inode_get_file_type (old_ent)
+      val new_type = inode_get_file_type (new_ent)
+      val cmp = inode_eq (old_ent, new_ent)
+      val islocked = inode_mutex_islocked (new_ent)
+      val () = opt_new_ent := option_vt_make (new_ent)
+    in
+      if cmp then false else if old_type = new_type then islocked else false
+    end
+  else false
+end else false
 
+////
+/* *************************
+ * fun inode_dir_rename_main {b:bool}(
+ * 	old_dir: !inode, 
+ *  old_ent: !inode,	
+ *  new_dir: !inode,	
+ *  opt_new_ent: &option_vt (inode, b) >> option_vt (inode, b),
+ *  opt_name: option (name, ~b),	
+ *  hd: !hd,
+ *  error: &ecode? >> ecode e
+): #[e: int] void
+** *************************/
+implement inode_dir_rename_main {b} (old_dir, old_ent, new_dir, opt_new_ent, opt_name, hd, error) =
+if  option_vt_isnil (opt_new_ent) then let
+  // dest doesn't exist
+  val name = option_getval (opt_name)
+  // get dir_entry location from inode
+  val o_entry = inode_get_entry_loc (old_ent, error)
+in
+  if is_succ (error) then let
+    val '(cid, bid, eid) = option_getval {'(cluster_id, block_id, dir_entry_id)} (o_entry)
+    val blk_no = fat_cluster_id_to_block_id (cid) + bid
+    // get the dir entry info
+    val dentry = hd_get_dir_entry (hd, blk_no, eid, error)
+    // update the dir entry
+    val dentry = dir_entry_update_name (dentry, name)        
+    // val dentry = todo update time
 
+    prval vtag = tag_create ()
+    
+    // clear the entry in the old directory
+    val (optt | o_rollback) = hd_clear_dir_entry (hd, blk_no, eid, error)
+  in
+    if is_succ (error) then let
+      prval vtag = optt_unsucc (optt)
+      val rollback1_hd = option_vt_getval {rollback_hd (1)} (o_rollback)   // todo why must add type here
+      
+      val time = get_cur_time ()
+      // update inode of old_dir
+      val (vtag | rollback2) = inode_set_time (vtag | old_dir, time)
+      val (optt | o_rollback) = hd_write_inode (vtag | hd, old_dir, error)  // update the inode for "dir"
+    in
+      if is_succ (error) then let
+        prval vtag = optt_unsucc (optt)
+        val rollback3_hd = option_vt_getval {rollback_hd (3)} (o_rollback)   // todo why must add type here
+        
+        // find slot in new directory
+        val (optt | o_rollback, o_entry) = 
+          clusters_find_empty_entry_new (vtag | hd, new_dir, error) 
+      in
+        if is_succ (error) then let  // found empty dir entry
+          prval vtag = optt_unsucc (optt)
+          val rollback4_hd = option_vt_getval {rollback_hd (4)} (o_rollback)   // todo why must add type here
+          val '(is_new, cid, bid, eid) = option_vt_getval {'(bool, cluster_id, block_id, dir_entry_id)} (o_entry)   // todo why must add type here
+        
+          // write new entry into new dir
+          val blk_no = fat_cluster_id_to_block_id (cid) + bid
+          val (optt | o_rollback) = hd_set_dir_entry (vtag | hd, blk_no, eid, dentry, error)  
+        in
+          if is_succ (error) then let
+            prval vtag = optt_unsucc (optt)
+            val rollback5_hd = option_vt_getval {rollback_hd (5)} (o_rollback) // todo why must add type here
+            
+            // update inode of old_dir
+            val (vtag | rollback6) = inode_set_time (vtag | new_dir, time)
+            val file_size = inode_get_file_size (new_dir)
+            val (vtag | rollback7) = (if is_new then inode_set_file_size (vtag | new_dir, file_size + CLS_SZ)
+                                   else inode_set_file_size (vtag | new_dir, file_size)): (tag 3 | rollback 3)   // todo why must add type here
+            val (optt | o_rollback) = hd_write_inode (vtag | hd, new_dir, error)  // update the inode for "dir"
+          in
+            if is_succ (error) then let
+              prval vtag = optt_unsucc (optt)
+              val rollback8_hd = option_vt_getval {rollback_hd (8)} (o_rollback)   // todo why must add type here
 
-
-
-
+              val (vtag | rollback9) = inode_set_entry_loc (vtag | old_ent, '(cid, bid, eid))
+              
+              val (vtag | ret) = rollback6 (vtag | hd, error)
+              val () = cloptr_free (rollback6)
+              val (vtag | ret) = rollback5 (vtag | hd, error)
+              val () = cloptr_free (rollback5)
+              val (vtag | ret) = rollback4 (vtag | hd, error)
+              val () = cloptr_free (rollback4)
+              val (vtag | ret) = rollback3 (vtag | error)
+              val () = cloptr_free (rollback3)
+              val (vtag | ret) = rollback2 (vtag | error)
+              val () = cloptr_free (rollback2)
+              val (vtag | ret) = rollback1 (vtag | hd, error)
+              val () = cloptr_free (rollback1)
+              prval () = tag_free (vtag)
+             
+    
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  

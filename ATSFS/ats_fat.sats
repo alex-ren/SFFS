@@ -88,6 +88,7 @@ absviewtype hd  // hard disk
 
 viewtypedef rollback (n: int) = rollback_res0 (n)
 viewtypedef rollback_hd (n: int) = rollback_res1 (hd, n)
+viewtypedef rollback_inode (n: int) = rollback_res1 (inode, n)
 
 
 
@@ -219,17 +220,21 @@ fun inode_create_from_dir_entry (e: dir_entry): inode
 fun inode_get_file_size (inode: !inode): file_sz
 
 (* external function *)
-fun inode_set_file_size {n: nat} (pf: tag (n) | inode: !inode, sz: file_sz): (tag (n+1)| rollback (n+1))
+fun inode_set_file_size {n: nat} (pf: tag (n) | inode: !inode, sz: file_sz): (tag (n+1)| rollback_inode (n+1))
 
 (* external function *)
-fun inode_set_time {n: nat} (pf: tag (n) | inode: !inode, time: time): (tag (n+1) | rollback (n+1))
+fun inode_set_time {n: nat} (pf: tag (n) | inode: !inode, time: time): (tag (n+1) | rollback_inode (n+1))
 
 fun inode_get_entry_loc (i: !inode, error: &ecode? >> ecode (e)): #[e:int | 
 	e==0 || e==ENOENT
 	]  
 	option ('(cluster_id, block_id, dir_entry_id), e == 0)
 
-fun inode_clear_entry_loc (i: !inode): void
+fun inode_clear_entry_loc {n: nat} (pf: tag (n) | i: !inode): (tag (n+1) | rollback_inode (n+1))
+
+fun inode_set_entry_loc {n: nat} (pf: tag (n) | i: !inode, loc: '(cluster_id, block_id, dir_entry_id)): (tag (n+1) | rollback_inode (n+1))
+
+fun inode_eq (i: !inode, j: !inode): bool
 
 (* ************** ****************** *)
 
@@ -251,6 +256,9 @@ fun dir_entry_update_size (entry: dir_entry, sz: file_sz): dir_entry
 
 (* external function *)
 fun dir_entry_get_size (entry: dir_entry): file_sz
+
+(* external function *)
+fun dir_entry_update_name (entry: dir_entry, name: name): dir_entry
 
 
 
@@ -387,6 +395,27 @@ fun inode_dir_mkdir_pre (dir: !inode, name: name, hd: !hd, error: &ecode?): bool
 // int msdos_rmdir(struct inode *dir, struct dentry *dentry)
 fun inode_dir_rmdir_main (dir: !inode, dirfile: !inode, hd: !hd, error: &ecode? >> ecode e): #[e: int] void
 fun inode_dir_rmdir_pre (dir: !inode, dirfile: !inode, hd: !hd, error: &ecode?): bool
+
+
+// int msdos_rename(struct inode *old_dir, struct dentry *old_dentry,
+// 			struct inode *new_dir, struct dentry *new_dentry)
+fun inode_dir_rename_pre {b:bool}(
+	old_dir: !inode, old_ent: !inode, 
+	new_dir: !inode, 
+	opt_new_ent: &option_vt (inode, b) >> option_vt (inode, b), // todo this is a little bit ugly
+	opt_name: option (name, ~b),
+	hd: !hd, 
+	error: &ecode?
+): bool
+
+fun inode_dir_rename_main {b:bool}(
+	old_dir: !inode, old_ent: !inode, 
+	new_dir: !inode, 
+	opt_new_ent: &option_vt (inode, b) >> option_vt (inode, b), // todo this is a little bit ugly
+	opt_name: option (name, ~b),
+	hd: !hd, 
+	error: &ecode? >> ecode e
+): #[e: int] void
 
 (* ************** ****************** *)
 // The following operations are related to file_operations
