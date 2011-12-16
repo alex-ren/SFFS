@@ -41,7 +41,7 @@ fun operation2 {n:nat} .<>. (vtag: tag n
   opt_tag (n, e) 
   | option_vt (
       rollback_res (n+1), e == 0)
-  ) = let
+  ) = let 
   prval vtag0 = tag_create ()
   val (opt_vtag1 | opt_f1) = operation2_1 (vtag0 | x, e)
 in

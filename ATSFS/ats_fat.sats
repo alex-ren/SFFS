@@ -169,7 +169,7 @@ fun hd_write_inode {n: nat} (pf: tag (n) |
 	inode: !inode, 
 	error: &ecode? >> ecode (e)
 ): #[e: int] (opt_tag (n, e) | 
-  option_vt (rollback_hd (n+1), e == 0))
+  option_vt (rollback_ihd (n+1), e == 0))
 
 (* ************** ****************** *)
 
@@ -213,6 +213,9 @@ fun inode_set_first_cluster (inode: !inode, cid: cluster_id): void
 // todo: currently assume it won't fail
 fun inode_create_from_dir_entry (e: dir_entry): inode
 
+fun inode_opt_release {b: bool}(i: option_vt (inode, b)): void
+    
+    
 (* external function *)
 // todo currently I don't need this function
 // fun inode_get_dir_entry (inode: !inode): '(cluster_id, block_id, dir_entry_id)
@@ -414,8 +417,9 @@ fun inode_dir_rmdir_pre (dir: !inode, dirfile: !inode, hd: !hd, error: &ecode?):
 fun inode_dir_rename_pre {b:bool}(
 	old_dir: !inode, old_ent: !inode, 
 	new_dir: !inode, 
-	opt_new_ent: &option_vt (inode, b) >> option_vt (inode, b), // todo this is a little bit ugly
+	opt_new_ent: !opt (inode, b),
 	opt_name: option (name, ~b),
+	bexist: bool b,
 	hd: !hd, 
 	error: &ecode?
 ): bool
@@ -423,8 +427,9 @@ fun inode_dir_rename_pre {b:bool}(
 fun inode_dir_rename_main {b:bool}(
 	old_dir: !inode, old_ent: !inode, 
 	new_dir: !inode, 
-	opt_new_ent: &option_vt (inode, b) >> option_vt (inode, b), // todo this is a little bit ugly
+	opt_new_ent: !opt (inode, b),
 	opt_name: option (name, ~b),
+	bexist: bool b,
 	hd: !hd, 
 	error: &ecode? >> ecode e
 ): #[e: int] void
