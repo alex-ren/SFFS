@@ -89,6 +89,7 @@ absviewtype hd  // hard disk
 viewtypedef rollback (n: int) = rollback_res0 (n)
 viewtypedef rollback_hd (n: int) = rollback_res1 (hd, n)
 viewtypedef rollback_inode (n: int) = rollback_res1 (inode, n)
+viewtypedef rollback_ihd (n: int) = rollback_res2 (inode, hd, n)
 
 
 
@@ -230,11 +231,21 @@ fun inode_get_entry_loc (i: !inode, error: &ecode? >> ecode (e)): #[e:int |
 	]  
 	option ('(cluster_id, block_id, dir_entry_id), e == 0)
 
+
 fun inode_clear_entry_loc {n: nat} (pf: tag (n) | i: !inode): (tag (n+1) | rollback_inode (n+1))
 
 fun inode_set_entry_loc {n: nat} (pf: tag (n) | i: !inode, loc: '(cluster_id, block_id, dir_entry_id)): (tag (n+1) | rollback_inode (n+1))
 
 fun inode_eq (i: !inode, j: !inode): bool
+
+	
+fun inode_get_entry (i: !inode, hd: !hd, error: &ecode? >> ecode (e)): #[e: int] option (dir_entry, e == 0)
+
+fun inode_set_entry {n:nat} (pf: tag (n) | i: !inode, hd: !hd, dentry: dir_entry, error: &ecode? >> ecode (e)): 
+  #[e: int] (opt_tag (n, e) | option_vt (rollback_ihd (n+1), e == 0))
+  
+fun inode_clear_entry {n:nat} (pf: tag (n) | i: !inode, hd: !hd, error: &ecode? >> ecode (e)): 
+  #[e: int] (opt_tag (n, e) | option_vt (rollback_ihd (n+1), e == 0))
 
 (* ************** ****************** *)
 
@@ -260,7 +271,8 @@ fun dir_entry_get_size (entry: dir_entry): file_sz
 (* external function *)
 fun dir_entry_update_name (entry: dir_entry, name: name): dir_entry
 
-
+(* external function *)
+fun dir_entry_get_name (entry: dir_entry): name
 
 (* ************** ****************** *)
 (* auxiliary function *)
@@ -319,7 +331,7 @@ fun clusters_find_empty_entry_new {n: nat} (pf: tag n |
 ): #[e: int] (
   opt_tag (n, e) | 
   option_vt (rollback_hd (n+1), e == 0), 
-  option_vt ('(bool, cluster_id, block_id, dir_entry_id), e == 0)
+  option ('(bool, cluster_id, block_id, dir_entry_id), e == 0)
 )
 
 fun clusters_find_empty_entry_new_precond (

@@ -55,7 +55,10 @@ viewtypedef rollback_res0 (n: int) =
           
 viewtypedef rollback_res1 (vt: viewtype, n: int) = 
         (tag n | !vt, ecode) -<lin, cloptr1> (tag (n-1) | int)
-        
+
+viewtypedef rollback_res2 (vt1: viewtype, vt2: viewtype, n: int) = 
+        (tag n | !vt1, !vt2, ecode) -<lin, cloptr1> (tag (n-1) | int)
+                
 fun abort {a: viewt@ype} (err: int):<!exn> a
 
 ////
