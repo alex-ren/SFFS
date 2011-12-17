@@ -434,6 +434,14 @@ fun inode_dir_rename_main {b:bool}(
 	error: &ecode? >> ecode e
 ): #[e: int] void
 
+// int fat_setattr(struct dentry *dentry, struct iattr *attr)
+
+// int fat_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat)
+
+// void fat_truncate(struct inode *inode)
+
+
+
 (* ************** ****************** *)
 // The following operations are related to file_operations
 
