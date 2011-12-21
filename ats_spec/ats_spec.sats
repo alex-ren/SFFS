@@ -44,6 +44,7 @@ abstype option0 (a: t@ype)
 absviewtype option0_vt (a: viewt@ype)
 abstype option (a: t@ype+, b: bool)
 absviewtype option_vt (a: viewt@ype+, b: bool)
+absviewtype opt (a: viewt@ype, b: bool)
 
 absview option_v (a: view, b: bool)
 (* ************** ****************** *)
@@ -161,7 +162,7 @@ fun {a:t@ype} seq_map (s: seq a, m: map (Nat, a)): seq a
 
 // sequence application
 // n must be in the indexes of s
-fun {a:t@ype} seq_app (s: seq a, n: Nat): a
+fun {a:t@ype} seq_apption_vt_remo (s: seq a, n: Nat): a
 
 fun {a:t@ype} seq_eq (s1: seq a, s2: seq a): bool
 
@@ -185,7 +186,7 @@ fun {a:t@ype} seq_neq (s1: seq a, s2: seq a): bool
 // refer to <<VDM-10 Language Manual>> P19
 
 (* *************** ****************** *)
-// add by Zhiqiang Ren
+// add by Zhiqiang Rtion_vt_remoen
 fun {a, b:t@ype} map_create (): map (a, b)
 fun {a, b:t@ype} map_update (m: map (a, b), d: a, t: b): map (a, b)
 (* *************** ****************** *)
@@ -336,6 +337,7 @@ fun option_make {a: type}(x: a): option (a, true)
 fun option_nil {a: type}(): option (a, false)
 
 // Operation
+fun option_isnil {a: type} {b:bool} (t: option (a, b)): bool ~b
 fun option_getval {a: type} (t: option (a, true)): a
 
 // Optional Viewtypes with bool
@@ -344,6 +346,7 @@ fun option_vt_make {a: viewtype} (x: a): option_vt (a, true)
 fun {a: viewt@ype} option_vt_nil {a: viewtype} (): option_vt (a, false)
 
 // Operation
+fun option_vt_isnil {a:  viewtype} {b:bool} (t: !option_vt (a, b)): bool ~b
 fun option_vt_getval {a: viewtype} (x: option_vt (a, true)): a
 fun option_vt_removenil {a: viewtype} (x: option_vt (a, false)): void
 
@@ -355,6 +358,14 @@ prfun option_v_nil {a: view} (): option_v (a, false)
 // Operation
 prfun option_v_getval {a: view} (pf: option_v (a, true)): a
 prfun option_v_removenil {a: view} (pf: option_v (a, false)): void
+
+praxi opt_some {a:viewt@ype} (x: !(a) >> opt (a, true)):<prf> void
+praxi opt_unsome {a:viewt@ype} (x: !opt (a, true) >> a):<prf> void
+//
+praxi opt_none {a:viewt@ype} (x: !(a?) >> opt (a, false)):<prf> void
+praxi opt_unnone {a:viewt@ype} (x: !opt (a, false) >> a?):<prf> void
+//
+praxi opt_clear {a:t@ype} {b:bool} (x: !opt (a, b) >> a?):<prf> void
 
 symintr unsome
 symintr unnone

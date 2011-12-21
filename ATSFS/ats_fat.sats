@@ -434,10 +434,13 @@ fun inode_dir_rename_main {b:bool}(
 	error: &ecode? >> ecode e
 ): #[e: int] void
 
+// change the size, time stamp and priviledge of the file
+// so far I decide not to implement this function
 // int fat_setattr(struct dentry *dentry, struct iattr *attr)
 
 // int fat_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat)
 
+// change size
 // void fat_truncate(struct inode *inode)
 
 
