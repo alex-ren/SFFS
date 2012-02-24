@@ -436,18 +436,28 @@ fun inode_dir_rename_main {b:bool}(
 
 // change the size, time stamp and priviledge of the file
 // so far I decide not to implement this function
+// This operation works on both file and dir.
 // int fat_setattr(struct dentry *dentry, struct iattr *attr)
 
+// Get the properties of the file
+// so far I decide not to implement this function
+// This operation works on both file and dir.
 // int fat_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat)
 
 // change size
+// only on common file not on dir
 // void fat_truncate(struct inode *inode)
+// to do later
 
 
 
 (* ************** ****************** *)
 // The following operations are related to file_operations
+// ssize_t (*read) (struct file *, char __user *, size_t, loff_t *);
+// ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *);
 
+// for dir
+// int (*readdir) (struct file *, void *, filldir_t);
 
 (* ************** ****************** *)
 // The following operations are related to super_operations
